@@ -2,8 +2,13 @@ import openai
 import time
 import requests
 import os
+from dotenv import load_dotenv
+from PIL import Image
+import io
 
+load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
 assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' # gpt4o-mini
 # assistant_mma_handicapper = 'asst_y96YuSfQ2qMZXbN2kom3bfSn' # gpt-3.5-turbo
 
@@ -14,6 +19,7 @@ if not openai.api_key:
 print("MMA AI Chatbot initialized. Type 'exit' to quit.")
 
 client = openai.OpenAI(api_key=openai.api_key)
+os.makedirs('data', exist_ok=True)
 thread_id = None
 
 while True:
