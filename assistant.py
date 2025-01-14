@@ -4,7 +4,8 @@ import requests
 import os
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa'
+assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' # gpt4o-mini
+# assistant_mma_handicapper = 'asst_y96YuSfQ2qMZXbN2kom3bfSn' # gpt-3.5-turbo
 
 if not openai.api_key:
     print("API key is required to run the chatbot.")
