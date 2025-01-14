@@ -23,7 +23,7 @@ os.makedirs('data', exist_ok=True)
 thread_id = None
 
 while True:
-    user_question = input("You: ")
+    user_question = input("\nYOU: ")
     if user_question.lower() == 'exit':
         print("Exiting chatbot. Goodbye!")
         break
