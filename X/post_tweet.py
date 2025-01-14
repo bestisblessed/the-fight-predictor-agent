@@ -62,8 +62,8 @@ def post_tweet_v2(text):
         print(f"Unexpected error: {e}")
 # Main program
 def main():
-    tweet_text = "Hello, Twitter! #MyFirstTweetAsAnAutonomousAgent"
-    # tweet_text = input("Enter your tweet: ")
+    # tweet_text = "Hello, Twitter! #MyFirstTweetAsAnAutonomousAgent"
+    tweet_text = input("Enter your tweet: ")
     post_tweet_v2(tweet_text)
 
 if __name__ == "__main__":
