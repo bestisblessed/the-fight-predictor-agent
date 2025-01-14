@@ -66,7 +66,11 @@ while True:
                 filename = f"data/assistant_image_{int(time.time())}.png"
                 with open(filename, "wb") as f:
                     f.write(image_data.content)
-                print(f"Image saved as {filename}")
+                print(f"Image saved {filename}")
+
+                # Display the image
+                img = Image.open(filename)
+                img.show()  # This will open the image in the default image viewer
             else:
                 print("Failed to download the image.")
         else:
