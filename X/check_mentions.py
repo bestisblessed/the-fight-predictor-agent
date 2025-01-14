@@ -1,6 +1,8 @@
 import requests
 import os
 from dotenv import load_dotenv
+import json
+
 load_dotenv()
 bearer_token = os.getenv("BEARER_TOKEN")
 username = "TheFightAgent"
@@ -14,7 +16,8 @@ else:
     if user_id:
         mentions_url = f"https://api.twitter.com/2/users/{user_id}/mentions"
         params = {
-            "max_results": 100,
+            # "max_results": 100,
+            "max_results": 20,
             "tweet.fields": "id,created_at,text,author_id",
         }
         mentions_response = requests.get(mentions_url, headers=headers, params=params)
@@ -23,5 +26,9 @@ else:
         else:
             mentions_data = mentions_response.json()
             print("Mentions found:", mentions_data)
+            
+            with open('data/mentions.json', 'w') as f:
+                json.dump(mentions_data, f, indent=4)
+            print("Mentions saved to data/mentions.json")
     else:
         print("Failed to retrieve user ID.")
