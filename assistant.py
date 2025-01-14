@@ -1,101 +1,66 @@
-# from openai import OpenAI
-# import os
-
-# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# # 1. Configure your OpenAI API key
-
-# # 2. Specify your assistant/model ID
-# ASSISTANT_ID = "asst_zahT75OFBs5jgi346C9vuzKa"  # e.g. "ft:gpt-3.5-turbo:some-id"
-
-# # A quick introduction
-# print("Welcome to the Fight Analysis Assistant!")
-# print("Ask questions about fights, fighters, or predictions.")
-# print("Type 'exit' or 'quit' to leave.\n")
-
-# # 3. Simple loop for user input
-# while True:
-#     user_input = input("You: ")
-
-#     if user_input.lower() in ("exit", "quit"):
-#         print("Assistant: Goodbye!")
-#         break
-
-#     try:
-#         response = client.chat.completions.create(# response = openai.Chat.create(
-#             model=ASSISTANT_ID,
-#             messages=[{"role": "user", "content": user_input}],
-#             temperature=0.7)
-#         assistant_msg = response.choices[0].message.content
-#         print("Assistant:", assistant_msg)
-
-#     except Exception as e:
-#         print("Error:", e)
-
-
-from openai import OpenAI
-import os
+import openai
 import time
+import requests
+import os
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai.api_key = os.getenv("OPENAI_API_KEY")
+assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa'
 
-# 2. Specify your assistant/model ID
-ASSISTANT_ID = "asst_zahT75OFBs5jgi346C9vuzKa"  # Use the correct assistant ID
+if not openai.api_key:
+    print("API key is required to run the chatbot.")
+    exit()
 
-# A quick introduction
-print("Welcome to the Fight Analysis Assistant!")
-print("Ask questions about fights, fighters, or predictions.")
-print("Type 'exit' or 'quit' to leave.\n")
+print("MMA AI Chatbot initialized. Type 'exit' to quit.")
 
-def create_thread_and_run(user_input):
-    # Create a new thread
-    thread = client.beta.threads.create()
-    
-    # Submit a message and start a run
-    client.beta.threads.messages.create(
-        thread_id=thread.id, role="user", content=user_input
-    )
-    run = client.beta.threads.runs.create(
-        thread_id=thread.id,
-        assistant_id=ASSISTANT_ID,
-    )
-    return thread, run
+client = openai.OpenAI(api_key=openai.api_key)
+thread_id = None
 
-def wait_on_run(run, thread):
-    # Wait for the run to complete
-    while run.status in ("queued", "in_progress"):
-        run = client.beta.threads.runs.retrieve(
-            thread_id=thread.id,
-            run_id=run.id,
-        )
-        time.sleep(0.5)
-    return run
-
-def get_response(thread):
-    # Get the list of messages in the thread
-    messages = client.beta.threads.messages.list(thread_id=thread.id, order="asc")
-    return messages
-
-# 3. Simple loop for user input
 while True:
-    user_input = input("You: ")
-    
-    if user_input.lower() in ("exit", "quit"):
-        print("Assistant: Goodbye!")
+    user_question = input("You: ")
+    if user_question.lower() == 'exit':
+        print("Exiting chatbot. Goodbye!")
         break
-    
-    try:
-        # Create a thread and run for the user input
-        thread, run = create_thread_and_run(user_input)
-        
-        # Wait for the run to complete
-        run = wait_on_run(run, thread)
-        
-        # Retrieve and print the response
-        messages = get_response(thread)
-        for message in messages:
-            if message.role == "assistant":
-                print("Assistant:", message.content[0].text.value)
-    
-    except Exception as e:
-        print("Error:", e)
+
+    if thread_id is None:
+        thread = client.beta.threads.create()
+        thread_id = thread.id
+        print(f"New conversation started with Thread ID: {thread_id}")
+
+    message = client.beta.threads.messages.create(
+        thread_id=thread_id,
+        role="user",
+        content=user_question
+    )
+
+    run = client.beta.threads.runs.create(
+        thread_id=thread_id,
+        assistant_id=assistant_mma_handicapper
+    )
+
+    print("Processing...")
+    while run.status != "completed":
+        time.sleep(2)
+        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+
+    messages = client.beta.threads.messages.list(thread_id=thread_id)
+    for message in reversed(messages.data):
+        if hasattr(message.content[0], 'text'):
+            print(f"AI: {message.content[0].text.value}")
+        elif hasattr(message.content[0], 'image_file'):
+            print("AI: [Image file received]")
+            file_id = message.content[0].image_file.file_id
+            file_url = f"https://api.openai.com/v1/files/{file_id}/content"
+            headers = {"Authorization": f"Bearer {openai.api_key}"}
+
+            print("Downloading image...")
+            image_data = requests.get(file_url, headers=headers)
+
+            if image_data.status_code == 200:
+                filename = f"data/assistant_image_{int(time.time())}.png"
+                with open(filename, "wb") as f:
+                    f.write(image_data.content)
+                print(f"Image saved as {filename}")
+            else:
+                print("Failed to download the image.")
+        else:
+            print("AI: [Unsupported content type]")
