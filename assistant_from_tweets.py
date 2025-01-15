@@ -1,97 +1,3 @@
-# import openai
-# import time
-# import requests
-# import os
-# from dotenv import load_dotenv
-# from PIL import Image
-# import io
-# from docx import Document
-
-# load_dotenv()
-# openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' # gpt4o-mini
-# # assistant_mma_handicapper = 'asst_y96YuSfQ2qMZXbN2kom3bfSn' # gpt-3.5-turbo
-
-# if not openai.api_key:
-#     print("API key is required to run the chatbot.")
-#     exit()
-
-# print("MMA AI Chatbot initialized. Processing tweets from document.")
-
-# client = openai.OpenAI(api_key=openai.api_key)
-# os.makedirs('data', exist_ok=True)
-# thread_id = None
-
-# def get_tweets_from_docx(file_path):
-#     document = Document(file_path)
-#     tweets = []
-#     for paragraph in document.paragraphs:
-#         if paragraph.text.strip():
-#             tweets.append(paragraph.text.strip())
-#     return tweets
-
-# # Path to the docx file containing tweets
-# tweets_file = 'X/data/TheFightAgentMentions.docx'
-# tweets = get_tweets_from_docx(tweets_file)
-
-# if not tweets:
-#     print("No tweets found in the document.")
-#     exit()
-
-# print(f"Found {len(tweets)} tweets in the document.")
-
-# for tweet in tweets:
-#     print(f"\nYOU (Tweet): {tweet}")
-
-#     if thread_id is None:
-#         thread = client.beta.threads.create()
-#         thread_id = thread.id
-#         print(f"New conversation started with Thread ID: {thread_id}")
-
-#     message = client.beta.threads.messages.create(
-#         thread_id=thread_id,
-#         role="user",
-#         content=tweet
-#     )
-
-#     run = client.beta.threads.runs.create(
-#         thread_id=thread_id,
-#         assistant_id=assistant_mma_handicapper
-#     )
-
-#     print("Processing...")
-#     while run.status != "completed":
-#         time.sleep(2)
-#         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-
-#     messages = client.beta.threads.messages.list(thread_id=thread_id)
-#     for message in reversed(messages.data):
-#         if hasattr(message.content[0], 'text'):
-#             print(f"AI: {message.content[0].text.value}")
-#         elif hasattr(message.content[0], 'image_file'):
-#             print("AI: [Image file received]")
-#             file_id = message.content[0].image_file.file_id
-#             file_url = f"https://api.openai.com/v1/files/{file_id}/content"
-#             headers = {"Authorization": f"Bearer {openai.api_key}"}
-
-#             print("Downloading image...")
-#             image_data = requests.get(file_url, headers=headers)
-
-#             if image_data.status_code == 200:
-#                 filename = f"data/assistant_image_{int(time.time())}.png"
-#                 with open(filename, "wb") as f:
-#                     f.write(image_data.content)
-#                 print(f"Image saved {filename}")
-
-#                 # Display the image
-#                 img = Image.open(filename)
-#                 img.show()  # This will open the image in the default image viewer
-#             else:
-#                 print("Failed to download the image.")
-#         else:
-#             print("AI: [Unsupported content type]")
-
 import openai
 import time
 import requests
@@ -100,49 +6,74 @@ from dotenv import load_dotenv
 from PIL import Image
 import io
 from docx import Document
-
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
-assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' # gpt4o-mini
-# assistant_mma_handicapper = 'asst_y96YuSfQ2qMZXbN2kom3bfSn' # gpt-3.5-turbo
-
+assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
 if not openai.api_key:
     print("API key is required to run the chatbot.")
     exit()
-
 print("MMA AI Chatbot initialized. Processing tweets from document.")
-
 client = openai.OpenAI(api_key=openai.api_key)
 os.makedirs('data', exist_ok=True)
 thread_id = None
+tweets_file = 'data/TheFightAgentMentions.docx'
+document = Document(tweets_file)
+tweets = []
+tweet_data = {}  # Store both tweet text and ID together
 
-def get_tweets_from_docx(file_path):
-    document = Document(file_path)
-    tweets = []
-    in_tweet_section = False
-    for paragraph in document.paragraphs:
-        if paragraph.text.strip().startswith("Tweet:"):
-            tweets.append(paragraph.text.strip().replace("Tweet:", "").strip())
-    return tweets
+# After initial imports and before processing tweets, load processed IDs
+processed_ids = set()
+try:
+    with open('data/processed_tweet_ids.txt', 'r') as f:
+        processed_ids = {line.strip() for line in f if line.strip()}
+    print(f"Loaded {len(processed_ids)} processed tweet IDs")
+except FileNotFoundError:
+    print("No previous tweet ID log found, starting fresh")
+
+print(f"\nDebug: Loaded processed IDs: {processed_ids}")
 
 # Path to the docx file containing tweets
-tweets_file = 'X/data/TheFightAgentMentions.docx'
-tweets = get_tweets_from_docx(tweets_file)
+tweets_file = 'data/TheFightAgentMentions.docx'
+document = Document(tweets_file)
+tweets = []
+tweet_data = {}  # Store both tweet text and ID together
+
+# Gather tweets that haven't been processed yet
+current_tweet = None
+current_id = None
+temp_tweet = None  # Store tweet text temporarily until we find its ID
+
+for paragraph in document.paragraphs:
+    text = paragraph.text.strip()
+    if text.startswith('-----------------------------------'):
+        current_id = None
+        temp_tweet = None  # Reset temporary tweet storage
+    elif text.startswith('Tweet:'):
+        temp_tweet = text.replace('Tweet:', '').strip()  # Store tweet text
+    elif text.startswith('Link:'):
+        current_id = text.split('/')[-1].strip()
+        print(f"Found Link ID: {current_id}")
+        # Now that we have both tweet and ID, check if we should process it
+        if temp_tweet and current_id and current_id not in processed_ids:
+            tweets.append(temp_tweet)
+            tweet_data[temp_tweet] = current_id
+            print(f"Added tweet with ID: {current_id}")
+
+print(f"\nDebug: Found tweets: {len(tweets)}")
 
 if not tweets:
-    print("No tweets found in the document.")
+    print("No new tweets found to process.")
     exit()
 
-print(f"Found {len(tweets)} tweets in the document.")
+print(f"Found {len(tweets)} new tweets to process.")
 
 for tweet in tweets:
     print(f"\nTweet: {tweet}")
-
-    if thread_id is None:
-        thread = client.beta.threads.create()
-        thread_id = thread.id
-        print(f"New conversation started with Thread ID: {thread_id}")
+    
+    # Create a new thread for each tweet
+    thread = client.beta.threads.create()
+    thread_id = thread.id
+    print(f"New conversation started with Thread ID: {thread_id}")
 
     message = client.beta.threads.messages.create(
         thread_id=thread_id,
@@ -154,12 +85,10 @@ for tweet in tweets:
         thread_id=thread_id,
         assistant_id=assistant_mma_handicapper
     )
-
     print("Processing...")
     while run.status != "completed":
         time.sleep(2)
         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-
     messages = client.beta.threads.messages.list(thread_id=thread_id)
     for message in reversed(messages.data):
         if hasattr(message.content[0], 'text'):
@@ -169,20 +98,61 @@ for tweet in tweets:
             file_id = message.content[0].image_file.file_id
             file_url = f"https://api.openai.com/v1/files/{file_id}/content"
             headers = {"Authorization": f"Bearer {openai.api_key}"}
-
             print("Downloading image...")
             image_data = requests.get(file_url, headers=headers)
-
             if image_data.status_code == 200:
                 filename = f"data/assistant_image_{int(time.time())}.png"
                 with open(filename, "wb") as f:
                     f.write(image_data.content)
                 print(f"Image saved {filename}")
-
-                # Display the image
                 img = Image.open(filename)
-                img.show()  # This will open the image in the default image viewer
+                img.show()  
             else:
                 print("Failed to download the image.")
         else:
             print("AI: [Unsupported content type]")
+
+    # After successful processing, log the tweet ID and remove the block
+    tweet_id = tweet_data[tweet]  # Get the ID for this tweet
+    with open('data/processed_tweet_ids.txt', 'a') as f:
+        f.write(f"{tweet_id}\n")
+    print(f"Logged processed tweet ID: {tweet_id}")
+
+    # Remove the processed tweet from document
+    paragraphs_to_keep = []
+    in_block_to_remove = False
+    separator_count = 0
+    
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        
+        # Count separators to track block boundaries
+        if text.startswith('-----------------------------------'):
+            separator_count += 1
+            # If we're at the end of a block we want to remove, skip this separator
+            if in_block_to_remove and separator_count % 2 == 0:
+                in_block_to_remove = False
+                continue
+            # If we're not removing this block, keep the separator
+            if not in_block_to_remove:
+                paragraphs_to_keep.append(text)
+            continue
+
+        # Check if this is the tweet we want to remove
+        if text.startswith('Tweet:') and text.replace('Tweet:', '').strip() == tweet:
+            in_block_to_remove = True
+            continue
+
+        # Only keep text if we're not in a block to remove
+        if not in_block_to_remove:
+            paragraphs_to_keep.append(text)
+    
+    # Create new document with remaining content
+    new_doc = Document()
+    for text in paragraphs_to_keep:
+        if text:  # Only add non-empty paragraphs
+            new_doc.add_paragraph(text)
+    
+    new_doc.save(tweets_file)
+    document = new_doc
+    print("Removed processed tweet and related content from document")
