@@ -173,12 +173,19 @@ for tweet in tweets:
             text=True
         )
         print(f"Drive upload output: {result.stdout}")
+        
+        # Only mark as processed if both upload and tweet reply were successful
+        if "429 Too Many Requests" not in result.stdout:
+            with open('data/processed_tweet_ids.txt', 'a') as f:
+                f.write(f"{tweet_id}\n")
+            print(f"Logged processed tweet ID: {tweet_id}")
+        else:
+            print(f"Rate limit hit for tweet {tweet_id}, will try again later")
+            continue  # Skip to next tweet without marking this one as processed
+            
     except subprocess.CalledProcessError as e:
         print(f"Failed to upload to Drive. Error: {e.stderr}")
-
-    with open('data/processed_tweet_ids.txt', 'a') as f:
-        f.write(f"{tweet_id}\n")
-    print(f"Logged processed tweet ID: {tweet_id}")
+        continue  # Skip to next tweet without marking this one as processed
 
     # Remove the processed tweet from document
     paragraphs_to_keep = []
