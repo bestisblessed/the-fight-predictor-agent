@@ -1,84 +1,45 @@
-### Islam Makachev's Last 5 Fights
+It appears that there is an issue with retrieving the fight histories for both Islam Makachev and Arman Tsarukyan from the provided data files. I was unable to find any records for Islam Makachev, while I found the last five fights for Arman Tsarukyan.
 
-1. **Opponent**: Arman Tsarukyan  
-   **Event**: UFC Fight Night  
-   **Date**: April 30, 2022  
-   **Result**: Win  
-   **Method**: Decision (Unanimous)  
-   **Fight Summary**: Makachev demonstrated his grappling superiority and striking precision, controlling the pace and distance effectively throughout the fight.
+### Arman Tsarukyan's Last Five Fights:
+1. **Fight against Christos Giagos**
+   - **Event:** UFC Fight Night 192 - Smith vs. Spann
+   - **Date:** September 18, 2021
+   - **Result:** Win by TKO (punches)
 
-2. **Opponent**: Bobby Green  
-   **Event**: UFC 284  
-   **Date**: February 11, 2023  
-   **Result**: Win  
-   **Method**: Submission (Arm-Triangle Choke)  
-   **Fight Summary**: Makachev showcased his elite grappling skills, securing a submission in the second round after dominating Green on the ground.
+2. **Fight against Matt Frevola**
+   - **Event:** UFC 257 - Poirier vs. McGregor 2
+   - **Date:** January 23, 2021
+   - **Result:** Win by Decision (Unanimous)
 
-3. **Opponent**: Charles Oliveira  
-   **Event**: UFC 280  
-   **Date**: October 22, 2022  
-   **Result**: Win  
-   **Method**: Submission (Rear-Naked Choke)  
-   **Fight Summary**: In a title fight, Makachev claimed the lightweight championship by submitting Oliveira in the second round, demonstrating his grappling prowess and strategic acumen.
+3. **Fight against Davi Ramos**
+   - **Event:** UFC Fight Night 172 - Figueiredo vs. Benavidez 2
+   - **Date:** July 18, 2020
+   - **Result:** Win by Decision (Unanimous)
 
-4. **Opponent**: Dan Hooker  
-   **Event**: UFC 267  
-   **Date**: October 30, 2021  
-   **Result**: Win  
-   **Method**: Submission (Rear-Naked Choke)  
-   **Fight Summary**: Makachev's wrestling and submission game was on full display as he finished Hooker in the first round.
+4. **Fight against Olivier Aubin-Mercier**
+   - **Event:** UFC 240 - Holloway vs. Edgar
+   - **Date:** July 27, 2019
+   - **Result:** Win by Decision (Unanimous)
 
-5. **Opponent**: Thiago Moisés  
-   **Event**: UFC Fight Night  
-   **Date**: June 26, 2021  
-   **Result**: Win  
-   **Method**: Submission (Arm-Triangle Choke)  
-   **Fight Summary**: Makachev controlled the fight on the ground and finished Moisés with a submission in the second round.
+5. **Fight against Islam Makachev**
+   - **Event:** UFC Fight Night 149 - Overeem vs. Oleinik
+   - **Date:** April 20, 2019
+   - **Result:** Loss by Decision (Unanimous)
 
-### Arman Tsarukyan's Last 5 Fights
+### Prediction for a Potential Fight Between Islam Makachev and Arman Tsarukyan:
+Given that I couldn't retrieve the latest fight history for Islam Makachev, I can make a general analysis based on their fighting styles and previous performances:
 
-1. **Opponent**: Mateusz Gamrot  
-   **Event**: UFC Fight Night  
-   **Date**: June 25, 2022  
-   **Result**: Loss  
-   **Method**: Decision (Split)  
-   **Fight Summary**: Tsarukyan delivered a strong performance but narrowly lost in a closely contested decision, showcasing his striking and grappling skills.
+- **Islam Makachev**: Known for his exceptional grappling skills and effective striking, Makachev has developed a strong submission game and has been consistently improving his stand-up technique. He often looks to take the fight to the ground where he can leverage his wrestling and submission skills.
 
-2. **Opponent**: Joaquim Silva  
-   **Event**: UFC Fight Night  
-   **Date**: March 12, 2022  
-   **Result**: Win  
-   **Method**: Decision (Unanimous)  
-   **Fight Summary**: Tsarukyan displayed effective striking and grappling, maintaining control and winning decisively.
+- **Arman Tsarukyan**: Tsarukyan is a well-rounded fighter with solid grappling and striking abilities. He has showcased effective striking combinations and can compete on the ground, though he tends to favor striking when possible.
 
-3. **Opponent**: Chris Giagos  
-   **Event**: UFC Fight Night  
-   **Date**: September 18, 2021  
-   **Result**: Win  
-   **Method**: Submission (Rear-Naked Choke)  
-   **Fight Summary**: Tsarukyan showcased his grappling skills, finishing Giagos in the second round.
+**Outcome Prediction**: 
+If Islam Makachev and Arman Tsarukyan were to fight again, I would predict that Islam Makachev would likely win, possibly by a submission in the later rounds (3rd round) due to his grappling proficiency and ability to control fights on the ground. 
 
-4. **Opponent**: Matt Frevola  
-   **Event**: UFC Fight Night  
-   **Date**: July 10, 2021  
-   **Result**: Win  
-   **Method**: Decision (Unanimous)  
-   **Fight Summary**: Tsarukyan utilized his striking and movement to outpoint Frevola over three rounds.
+**Method of Victory**: Submission (likely a rear-naked choke or arm triangle) in Round 3.
 
-5. **Opponent**: Islam Makachev  
-   **Event**: UFC Fight Night  
-   **Date**: April 30, 2022  
-   **Result**: Loss  
-   **Method**: Decision (Unanimous)  
-   **Fight Summary**: In their first encounter, Tsarukyan fought valiantly but was outperformed by Makachev's grappling and striking.
+### Rationale:
+- Makachev's experience and grappling acumen give him a significant advantage in controlling the pace and location of the fight.
+- Tsarukyan has improved since their last encounter, but Makachev's current form and fight IQ could allow him to capitalize on any openings in Tsarukyan's game.
 
-### Prediction for a Potential Rematch
-
-**Outcome Prediction**: Islam Makachev wins by Submission in Round 3.
-
-**Reasoning**:
-- **Grappling Advantage**: Makachev has shown superior grappling and submission skills in his recent fights, consistently finishing opponents on the ground.
-- **Experience**: Having faced a higher caliber of opponents and winning crucial fights, Makachev's experience will be pivotal in a rematch.
-- **Fight Strategy**: Makachev's strategy often involves wearing down his opponents with wrestling before seeking submissions. If he executes this strategy effectively, Tsarukyan may struggle to defend against the submissions.
-
-This fight would likely follow a similar pattern to their first encounter, with Makachev controlling the pace and ultimately seeking a submission victory.
+If you have more specific details or corrections regarding the data, please share, and I can refine the analysis accordingly!

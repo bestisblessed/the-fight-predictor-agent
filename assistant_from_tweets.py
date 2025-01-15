@@ -156,6 +156,25 @@ for tweet in tweets:
     with open(response_file, 'w', encoding='utf-8') as f:
         f.write(ai_response)  # Just save the raw AI response
     print(f"Saved response to {response_file}")
+    
+    # Upload the response file to Google Drive
+    try:
+        # Get the full Python path
+        python_path = subprocess.run(['which', 'python'], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        ).stdout.strip()
+        
+        result = subprocess.run(
+            [python_path, 'X/upload_responses_to_drive.py', tweet_id],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print(f"Drive upload output: {result.stdout}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to upload to Drive. Error: {e.stderr}")
 
     with open('data/processed_tweet_ids.txt', 'a') as f:
         f.write(f"{tweet_id}\n")
