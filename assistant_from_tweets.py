@@ -121,13 +121,90 @@ for tweet in tweets:
                     text=True
                 )
                 print(f"Reply script output: {result.stdout}")
+                
+                # If rate limited, skip EVERYTHING else
+                if "429 Too Many Requests" in result.stdout:
+                    print("Rate limit hit, will try this tweet again later")
+                    exit()  # Exit the entire program if rate limited
+                
+                # Everything below this only happens if NO rate limit hit
                 print("Successfully sent reply to Twitter")
+                
+                os.makedirs('responses', exist_ok=True)
+                response_file = f'responses/{tweet_id}.txt'
+                with open(response_file, 'w', encoding='utf-8') as f:
+                    f.write(ai_response)
+                print(f"Saved response to {response_file}")
+                
+                # Upload to Drive
+                try:
+                    python_path = subprocess.run(['which', 'python'], 
+                        capture_output=True, 
+                        text=True, 
+                        check=True
+                    ).stdout.strip()
+                    
+                    result = subprocess.run(
+                        [python_path, 'X/upload_responses_to_drive.py', tweet_id],
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    print(f"Drive upload output: {result.stdout}")
+                    
+                    # Mark as processed
+                    with open('data/processed_tweet_ids.txt', 'a') as f:
+                        f.write(f"{tweet_id}\n")
+                    print(f"Logged processed tweet ID: {tweet_id}")
+                    
+                    # Remove from document
+                    paragraphs_to_keep = []
+                    in_block_to_remove = False
+                    separator_count = 0
+                    
+                    for paragraph in document.paragraphs:
+                        text = paragraph.text.strip()
+                        
+                        # Count separators to track block boundaries
+                        if text.startswith('-----------------------------------'):
+                            separator_count += 1
+                            # If we're at the end of a block we want to remove, skip this separator
+                            if in_block_to_remove and separator_count % 2 == 0:
+                                in_block_to_remove = False
+                                continue
+                            # If we're not removing this block, keep the separator
+                            if not in_block_to_remove:
+                                paragraphs_to_keep.append(text)
+                            continue
+
+                        # Check if this is the tweet we want to remove
+                        if text.startswith('Tweet:') and text.replace('Tweet:', '').strip() == tweet:
+                            in_block_to_remove = True
+                            continue
+
+                        # Only keep text if we're not in a block to remove
+                        if not in_block_to_remove:
+                            paragraphs_to_keep.append(text)
+                    
+                    # Create new document with remaining content
+                    new_doc = Document()
+                    for text in paragraphs_to_keep:
+                        if text:  # Only add non-empty paragraphs
+                            new_doc.add_paragraph(text)
+                    
+                    new_doc.save(tweets_file)
+                    document = new_doc
+                    print("Removed processed tweet and related content from document")
+                    
+                except subprocess.CalledProcessError as e:
+                    print(f"Failed to upload to Drive. Error: {e.stderr}")
+                    exit()
+                    
             except subprocess.CalledProcessError as e:
                 print(f"Failed to send reply to Twitter. Error code: {e.returncode}")
                 print(f"Error output: {e.stderr}")
                 print(f"Standard output: {e.stdout}")
-                # Optionally, don't mark as processed if the reply failed
-                continue
+                exit()
         elif hasattr(message.content[0], 'image_file'):
             print("AI: [Image file received]")
             file_id = message.content[0].image_file.file_id
