@@ -114,8 +114,15 @@ for tweet in tweets:
             
             # Call the reply script as a subprocess with enhanced error handling
             try:
+                # Get the full Python path
+                python_path = subprocess.run(['which', 'python'], 
+                    capture_output=True, 
+                    text=True, 
+                    check=True
+                ).stdout.strip()
+                
                 result = subprocess.run(
-                    ['python', 'X/reply_single_tweet.py', tweet_id, ai_response], 
+                    [python_path, 'X/reply_single_tweet.py', tweet_id, ai_response], 
                     check=True,
                     capture_output=True,
                     text=True
