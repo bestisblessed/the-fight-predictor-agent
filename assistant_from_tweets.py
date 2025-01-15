@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from PIL import Image
 import io
 from docx import Document
+import subprocess
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
@@ -92,7 +93,15 @@ for tweet in tweets:
     messages = client.beta.threads.messages.list(thread_id=thread_id)
     for message in reversed(messages.data):
         if hasattr(message.content[0], 'text'):
-            print(f"AI: {message.content[0].text.value}")
+            ai_response = message.content[0].text.value
+            print(f"AI: {ai_response}")
+            tweet_id = tweet_data[tweet]
+            # Call the reply script as a subprocess
+            try:
+                subprocess.run(['python', 'X/reply_single_tweet.py', tweet_id, ai_response], check=True)
+                print("Successfully sent reply to Twitter")
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to send reply to Twitter: {e}")
         elif hasattr(message.content[0], 'image_file'):
             print("AI: [Image file received]")
             file_id = message.content[0].image_file.file_id
@@ -156,3 +165,5 @@ for tweet in tweets:
     new_doc.save(tweets_file)
     document = new_doc
     print("Removed processed tweet and related content from document")
+
+

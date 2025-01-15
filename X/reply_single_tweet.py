@@ -1,6 +1,15 @@
 import os
 import tweepy
+import sys
 from dotenv import load_dotenv
+
+# Check command line arguments
+if len(sys.argv) < 3:
+    print("Usage: python reply_single_tweet.py <tweet_id> <reply_text...>")
+    exit(1)
+
+tweet_id = sys.argv[1]
+reply_text = ' '.join(sys.argv[2:])  # Join all remaining arguments as the reply text
 
 load_dotenv()
 API_KEY = os.getenv("TWITTER_API_KEY")
@@ -20,8 +29,8 @@ client = tweepy.Client(
 
 # Reply to a specific tweet ID
 try:
-    tweet_id = "1879384998589124828"
-    reply_text = "Greetings"
+    # tweet_id = "1879384998589124828"
+    # reply_text = "Greetings"
     response = client.create_tweet(
         text=reply_text,
         in_reply_to_tweet_id=tweet_id
