@@ -100,6 +100,18 @@ for tweet in tweets:
                 continue
             print(f"AI: {ai_response}")
             tweet_id = tweet_data[tweet]
+            
+            # # Save the tweet and response to a file named after the tweet ID
+            # timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            # response_file = f'responses/{tweet_id}.txt'
+            # with open(response_file, 'w', encoding='utf-8') as f:
+            #     f.write(f"Timestamp: {timestamp}\n")
+            #     f.write(f"Tweet ID: {tweet_id}\n")
+            #     f.write(f"Original Tweet: {tweet}\n")
+            #     f.write(f"AI Response: {ai_response}\n")
+            
+            # print(f"Saved response to {response_file}")
+            
             # Call the reply script as a subprocess with enhanced error handling
             try:
                 result = subprocess.run(
@@ -137,6 +149,14 @@ for tweet in tweets:
 
     # After successful processing, log the tweet ID and remove the block
     tweet_id = tweet_data[tweet]  # Get the ID for this tweet
+    
+    # Save the raw AI response to a text file
+    os.makedirs('responses', exist_ok=True)
+    response_file = f'responses/{tweet_id}.txt'
+    with open(response_file, 'w', encoding='utf-8') as f:
+        f.write(ai_response)  # Just save the raw AI response
+    print(f"Saved response to {response_file}")
+
     with open('data/processed_tweet_ids.txt', 'a') as f:
         f.write(f"{tweet_id}\n")
     print(f"Logged processed tweet ID: {tweet_id}")
