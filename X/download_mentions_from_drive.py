@@ -12,7 +12,7 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 def authenticate():
     creds = None
     # Path to the token file
-    token_path = 'token.json'
+    token_path = 'credentials/token.json'
     
     # Load credentials from token file if it exists
     if os.path.exists(token_path):
@@ -23,8 +23,11 @@ def authenticate():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('credentials/credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
+        
+        # Create credentials directory if it doesn't exist
+        os.makedirs('credentials', exist_ok=True)
         
         # Save the credentials for future use
         with open(token_path, 'w') as token:
@@ -37,6 +40,10 @@ def export_file(file_id, file_name, mime_type):
     service = build('drive', 'v3', credentials=creds)
     try:
         request = service.files().export_media(fileId=file_id, mimeType=mime_type)
+        # Create data directory if it doesn't exist
+        os.makedirs('data', exist_ok=True)
+        
+        # Remove the file_path creation here since file_name already includes the path
         with io.FileIO(file_name, 'wb') as fh:
             downloader = MediaIoBaseDownload(fh, request)
             done = False
@@ -46,13 +53,12 @@ def export_file(file_id, file_name, mime_type):
         print(f"File '{file_name}' exported and downloaded successfully.")
     except Exception as e:
         print(f"An error occurred: {e}")
-
+        
 # Replace 'file_id' and 'file_name' with your actual file ID and desired download name
-file_id = '1LqOYgAPotW-cpqxF5sWnrT9FeIvbJo2dJyj2MMuy8-U'
-file_name = 'TheFightAgentMentions.docx'  # Add the correct extension
+file_id = '1YTd9zqq4lhNrZZXU4JJzbSgo-uUeuzcQq0oBYOS5lvk'
+file_name = os.path.join('data', 'TheFightAgentMentions.docx')  # Add the correct extension and data directory
 mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 export_file(file_id, file_name, mime_type)
-
 
 
 # from google.oauth2.credentials import Credentials
