@@ -1,0 +1,188 @@
+# import openai
+# import time
+# import requests
+# import os
+# from dotenv import load_dotenv
+# from PIL import Image
+# import io
+# from docx import Document
+
+# load_dotenv()
+# openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' # gpt4o-mini
+# # assistant_mma_handicapper = 'asst_y96YuSfQ2qMZXbN2kom3bfSn' # gpt-3.5-turbo
+
+# if not openai.api_key:
+#     print("API key is required to run the chatbot.")
+#     exit()
+
+# print("MMA AI Chatbot initialized. Processing tweets from document.")
+
+# client = openai.OpenAI(api_key=openai.api_key)
+# os.makedirs('data', exist_ok=True)
+# thread_id = None
+
+# def get_tweets_from_docx(file_path):
+#     document = Document(file_path)
+#     tweets = []
+#     for paragraph in document.paragraphs:
+#         if paragraph.text.strip():
+#             tweets.append(paragraph.text.strip())
+#     return tweets
+
+# # Path to the docx file containing tweets
+# tweets_file = 'X/data/TheFightAgentMentions.docx'
+# tweets = get_tweets_from_docx(tweets_file)
+
+# if not tweets:
+#     print("No tweets found in the document.")
+#     exit()
+
+# print(f"Found {len(tweets)} tweets in the document.")
+
+# for tweet in tweets:
+#     print(f"\nYOU (Tweet): {tweet}")
+
+#     if thread_id is None:
+#         thread = client.beta.threads.create()
+#         thread_id = thread.id
+#         print(f"New conversation started with Thread ID: {thread_id}")
+
+#     message = client.beta.threads.messages.create(
+#         thread_id=thread_id,
+#         role="user",
+#         content=tweet
+#     )
+
+#     run = client.beta.threads.runs.create(
+#         thread_id=thread_id,
+#         assistant_id=assistant_mma_handicapper
+#     )
+
+#     print("Processing...")
+#     while run.status != "completed":
+#         time.sleep(2)
+#         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+
+#     messages = client.beta.threads.messages.list(thread_id=thread_id)
+#     for message in reversed(messages.data):
+#         if hasattr(message.content[0], 'text'):
+#             print(f"AI: {message.content[0].text.value}")
+#         elif hasattr(message.content[0], 'image_file'):
+#             print("AI: [Image file received]")
+#             file_id = message.content[0].image_file.file_id
+#             file_url = f"https://api.openai.com/v1/files/{file_id}/content"
+#             headers = {"Authorization": f"Bearer {openai.api_key}"}
+
+#             print("Downloading image...")
+#             image_data = requests.get(file_url, headers=headers)
+
+#             if image_data.status_code == 200:
+#                 filename = f"data/assistant_image_{int(time.time())}.png"
+#                 with open(filename, "wb") as f:
+#                     f.write(image_data.content)
+#                 print(f"Image saved {filename}")
+
+#                 # Display the image
+#                 img = Image.open(filename)
+#                 img.show()  # This will open the image in the default image viewer
+#             else:
+#                 print("Failed to download the image.")
+#         else:
+#             print("AI: [Unsupported content type]")
+
+import openai
+import time
+import requests
+import os
+from dotenv import load_dotenv
+from PIL import Image
+import io
+from docx import Document
+
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' # gpt4o-mini
+# assistant_mma_handicapper = 'asst_y96YuSfQ2qMZXbN2kom3bfSn' # gpt-3.5-turbo
+
+if not openai.api_key:
+    print("API key is required to run the chatbot.")
+    exit()
+
+print("MMA AI Chatbot initialized. Processing tweets from document.")
+
+client = openai.OpenAI(api_key=openai.api_key)
+os.makedirs('data', exist_ok=True)
+thread_id = None
+
+def get_tweets_from_docx(file_path):
+    document = Document(file_path)
+    tweets = []
+    in_tweet_section = False
+    for paragraph in document.paragraphs:
+        if paragraph.text.strip().startswith("Tweet:"):
+            tweets.append(paragraph.text.strip().replace("Tweet:", "").strip())
+    return tweets
+
+# Path to the docx file containing tweets
+tweets_file = 'X/data/TheFightAgentMentions.docx'
+tweets = get_tweets_from_docx(tweets_file)
+
+if not tweets:
+    print("No tweets found in the document.")
+    exit()
+
+print(f"Found {len(tweets)} tweets in the document.")
+
+for tweet in tweets:
+    print(f"\nTweet: {tweet}")
+
+    if thread_id is None:
+        thread = client.beta.threads.create()
+        thread_id = thread.id
+        print(f"New conversation started with Thread ID: {thread_id}")
+
+    message = client.beta.threads.messages.create(
+        thread_id=thread_id,
+        role="user",
+        content=tweet
+    )
+
+    run = client.beta.threads.runs.create(
+        thread_id=thread_id,
+        assistant_id=assistant_mma_handicapper
+    )
+
+    print("Processing...")
+    while run.status != "completed":
+        time.sleep(2)
+        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+
+    messages = client.beta.threads.messages.list(thread_id=thread_id)
+    for message in reversed(messages.data):
+        if hasattr(message.content[0], 'text'):
+            print(f"AI: {message.content[0].text.value}")
+        elif hasattr(message.content[0], 'image_file'):
+            print("AI: [Image file received]")
+            file_id = message.content[0].image_file.file_id
+            file_url = f"https://api.openai.com/v1/files/{file_id}/content"
+            headers = {"Authorization": f"Bearer {openai.api_key}"}
+
+            print("Downloading image...")
+            image_data = requests.get(file_url, headers=headers)
+
+            if image_data.status_code == 200:
+                filename = f"data/assistant_image_{int(time.time())}.png"
+                with open(filename, "wb") as f:
+                    f.write(image_data.content)
+                print(f"Image saved {filename}")
+
+                # Display the image
+                img = Image.open(filename)
+                img.show()  # This will open the image in the default image viewer
+            else:
+                print("Failed to download the image.")
+        else:
+            print("AI: [Unsupported content type]")
