@@ -2,6 +2,7 @@ import requests
 import os
 from dotenv import load_dotenv
 import json
+import time
 
 load_dotenv()
 bearer_token = os.getenv("BEARER_TOKEN")
@@ -12,12 +13,16 @@ user_id_response = requests.get(user_id_url, headers=headers)
 if user_id_response.status_code != 200:
     print(f"Error fetching user ID: {user_id_response.status_code}, {user_id_response.text}")
 else:
+    # Get rate limit info from user_id response
+    rate_limit_remaining = user_id_response.headers.get("x-rate-limit-remaining")
+    rate_limit_reset = user_id_response.headers.get("x-rate-limit-reset")
+    
     user_id = user_id_response.json().get("data", {}).get("id")
     if user_id:
         mentions_url = f"https://api.twitter.com/2/users/{user_id}/mentions"
         params = {
             # "max_results": 100,
-            "max_results": 5,
+            "max_results": 10,
             "tweet.fields": "id,created_at,text,author_id",
         }
         mentions_response = requests.get(mentions_url, headers=headers, params=params)
@@ -38,6 +43,13 @@ else:
                 print(f"Created At: {tweet['created_at']}")
                 print(f"Text: {tweet['text']}")
                 print("-" * 40)
+        
+        # After all operations are complete, print rate limit status
+        if rate_limit_remaining and rate_limit_reset:
+            reset_time = time.strftime('%Y-%m-%d %I:%M:%S %p', time.localtime(int(rate_limit_reset)))
+            print("\nRate Limit Status:")
+            print(f"Rate Limit Remaining: {rate_limit_remaining} requests")
+            print(f"Rate Limit Resets At: {reset_time} (local time)")
     else:
         print("Failed to retrieve user ID.")
 
