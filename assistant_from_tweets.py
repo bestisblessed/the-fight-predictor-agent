@@ -91,17 +91,31 @@ for tweet in tweets:
         time.sleep(2)
         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
     messages = client.beta.threads.messages.list(thread_id=thread_id)
+    # Skip the first message (user's question) by checking message role
     for message in reversed(messages.data):
         if hasattr(message.content[0], 'text'):
             ai_response = message.content[0].text.value
+            # Skip if this is the user's original question
+            if message.role == "user":
+                continue
             print(f"AI: {ai_response}")
             tweet_id = tweet_data[tweet]
-            # Call the reply script as a subprocess
+            # Call the reply script as a subprocess with enhanced error handling
             try:
-                subprocess.run(['python', 'X/reply_single_tweet.py', tweet_id, ai_response], check=True)
+                result = subprocess.run(
+                    ['python', 'X/reply_single_tweet.py', tweet_id, ai_response], 
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                print(f"Reply script output: {result.stdout}")
                 print("Successfully sent reply to Twitter")
             except subprocess.CalledProcessError as e:
-                print(f"Failed to send reply to Twitter: {e}")
+                print(f"Failed to send reply to Twitter. Error code: {e.returncode}")
+                print(f"Error output: {e.stderr}")
+                print(f"Standard output: {e.stdout}")
+                # Optionally, don't mark as processed if the reply failed
+                continue
         elif hasattr(message.content[0], 'image_file'):
             print("AI: [Image file received]")
             file_id = message.content[0].image_file.file_id
