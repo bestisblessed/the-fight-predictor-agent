@@ -13,7 +13,7 @@ assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa'
 if not openai.api_key:
     print("API key is required to run the chatbot.")
     exit()
-print("MMA AI Chatbot initialized. Processing tweets from document.")
+print("MMA AI Chatbot Initialized - Processing Tweets.")
 client = openai.OpenAI(api_key=openai.api_key)
 os.makedirs('data', exist_ok=True)
 thread_id = None
@@ -28,11 +28,11 @@ processed_ids = set()
 try:
     with open('data/processed_tweet_ids.txt', 'r') as f:
         processed_ids = {line.strip() for line in f if line.strip()}
-    print(f"Loaded {len(processed_ids)} processed tweet IDs")
+    # print(f"Loaded {len(processed_ids)} processed tweet IDs")
 except FileNotFoundError:
     print("No previous tweet ID log found, starting fresh")
 
-print(f"\nDebug: Loaded processed IDs: {processed_ids}")
+# print(f"\nDebug: Loaded processed IDs: {processed_ids}")
 
 # Path to the docx file containing tweets
 tweets_file = 'data/TheFightAgentMentions.docx'
@@ -62,7 +62,7 @@ for paragraph in document.paragraphs:
             tweet_data[temp_tweet] = current_id
             print(f"Added tweet with ID: {current_id}")
 
-print(f"\nDebug: Found tweets: {len(tweets)}")
+# print(f"\nFound new tweets: {len(tweets)}")
 
 if not tweets:
     print("No new tweets found to process.")

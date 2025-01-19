@@ -49,8 +49,7 @@ def export_file(file_id, file_name, mime_type):
             done = False
             while not done:
                 status, done = downloader.next_chunk()
-                print(f"Download progress: {int(status.progress() * 100)}%")
-        print(f"File '{file_name}' exported and downloaded successfully.")
+                print(f"Download progress: {int(status.progress() * 100)}% | '{file_name}' downloaded successfully.")
     except Exception as e:
         print(f"An error occurred: {e}")
         
