@@ -150,7 +150,10 @@ for tweet in tweets:
 
     # Log the processed tweet ID
     with open('data/processed_tweet_ids.txt', 'a') as f:
-        f.write(f"{tweet_id}\n")
+        f.write(f"{tweet_id}")
+        f.write("")  # Platform-independent newline
+        f.write("\n")  # Platform-independent newline
+        # f.write(f"{tweet_id}\n")
     print(f"Logged processed tweet ID: {tweet_id}")
 
 
