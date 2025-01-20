@@ -4,8 +4,8 @@
 
 # export HOME=/home/trinity
 echo $HOME
-echo "HOME is set to: $HOME" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
-env >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
+# echo "HOME is set to: $HOME" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
+# env >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
 
 touch $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
 # echo "------------------------------------------------" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
