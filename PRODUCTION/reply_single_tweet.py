@@ -2,6 +2,7 @@ import os
 import tweepy
 import sys
 from dotenv import load_dotenv
+import time
 
 # Check command line arguments
 if len(sys.argv) < 3:
@@ -74,7 +75,12 @@ try:
             in_reply_to_tweet_id=tweet_id  # Reply to the tweet
         )
 
-    print(f"Tweeted with ID: {response.data['id']}")
+    # Retweet the original tweet
+    time.sleep(15)
+    reply_id = response.data['id']
+    print(f"Tweeted with ID: {reply_id}")
+    client.retweet(reply_id)
+    print(f"Retweeted tweet ID: {id}")
 
 
     # # Create the tweet, with or without media
