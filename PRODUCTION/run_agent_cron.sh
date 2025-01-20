@@ -14,8 +14,10 @@ echo "Starting Agent: $(date)" >> $HOME/the-fight-predictor-agent/PRODUCTION/cro
 # cd $HOME/the-fight-predictor-agent/PRODUCTION
 # $HOME/.pyenv/shims/python download_mentions_from_drive.py
 # $HOME/.pyenv/shims/python assistant_from_tweets.py
-$HOME/.pyenv/shims/python download_mentions_from_drive.py >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
-$HOME/.pyenv/shims/python assistant_from_tweets.py >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
+# $HOME/.pyenv/shims/python download_mentions_from_drive.py >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
+# $HOME/.pyenv/shims/python assistant_from_tweets.py >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
+$HOME/.pyenv/shims/python $HOME/the-fight-predictor-agent/PRODUCTION/download_mentions_from_drive.py >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
+$HOME/.pyenv/shims/python $HOME/the-fight-predictor-agent/PRODUCTION/assistant_from_tweets.py >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
 
 
 echo "Completed Agent: $(date)" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
