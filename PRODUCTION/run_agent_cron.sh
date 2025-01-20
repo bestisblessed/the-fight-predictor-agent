@@ -3,12 +3,10 @@
 # */5 * * * * /home/trinity/the-fight-predictor-agent/PRODUCTION/run_agent_cron.sh >> /home/trinity/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
 
 # export HOME=/home/trinity
-echo $HOME
+# echo $HOME
 # echo "HOME is set to: $HOME" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
 # env >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1
-
 touch $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
-# echo "------------------------------------------------" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
 echo "Starting Agent: $(date)" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
 
 cd $HOME/the-fight-predictor-agent/PRODUCTION
