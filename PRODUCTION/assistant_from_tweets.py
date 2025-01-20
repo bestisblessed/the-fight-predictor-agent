@@ -18,6 +18,8 @@ if not openai.api_key:
 print("MMA AI Chatbot Initialized - Processing Tweets.")
 client = openai.OpenAI(api_key=openai.api_key)
 os.makedirs('data', exist_ok=True)
+os.makedirs('responses', exist_ok=True)
+os.makedirs('files', exist_ok=True)
 thread_id = None
 tweets_file = 'data/TheFightAgentMentions.docx'
 # tweets_file = 'data/TheFightAgentMentionsCombined.docx'
@@ -64,7 +66,7 @@ for paragraph in document.paragraphs:
             tweet_data[temp_tweet] = current_id
             print(f"Added tweet with ID: {current_id}")
 
-# print(f"\nFound new tweets: {len(tweets)}")
+print(f"\nFound new tweets: {len(tweets)}")
 
 if not tweets:
     print("No new tweets found to process.")
@@ -95,61 +97,80 @@ for tweet in tweets:
         time.sleep(2)
         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
     messages = client.beta.threads.messages.list(thread_id=thread_id)
-    for message in reversed(messages.data):
-        if hasattr(message.content[0], 'text'):
-            ai_response = message.content[0].text.value
-            # Skip if this is the user's original question
-            if message.role == "user":
-                continue
-            print(f"AI: {ai_response}")
-            tweet_id = tweet_data[tweet]
-            
-            # Call the reply script as a subprocess with enhanced error handling
-            try:
-                result = subprocess.run(
-                    ['python', 'reply_single_tweet.py', tweet_id, ai_response], 
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                print(f"Reply script output: {result.stdout}")
-                print("Successfully sent reply to Twitter")
-            except subprocess.CalledProcessError as e:
-                print(f"Failed to send reply to Twitter. Error code: {e.returncode}")
-                print(f"Error output: {e.stderr}")
-                print(f"Standard output: {e.stdout}")
-                # Optionally, don't mark as processed if the reply failed
-                continue
 
-        elif hasattr(message.content[0], 'image_file'):
+    tweet_id = tweet_data[tweet]
+    ai_response = None
+
+    # ai_response_text = None  # Initialize ai_response_text variable before processing messages
+    # ai_response_image = None  # Initialize ai_response_image variable
+    # ai_response = None
+
+    # First pass: gather the AI's text (if any)
+    for msg in messages.data:
+        if msg.role != "user" and hasattr(msg.content[0], "text"):
+            # Capture the assistant's text
+            ai_response = msg.content[0].text.value
+            print(f"AI Text: {ai_response}")
+
+            # Save the AI text response immediately
+            os.makedirs('responses', exist_ok=True)
+            response_file = f"responses/{tweet_id}.txt"
+            with open(response_file, 'a', encoding='utf-8') as f:
+                f.write(ai_response + "\n\n")
+            print(f"Appended AI text: {ai_response}")
+
+            # Since we've found the most recent text from the assistant, break out
+            break
+
+    # # If nothing found, default to a message
+    # if ai_response is None:
+    #     ai_response = "No text response received from AI."
+    #     # Still save a file if you want to ensure it always exists:
+    #     os.makedirs('responses', exist_ok=True)
+    #     response_file = f"responses/{tweet_id}.txt"
+    #     with open(response_file, 'w', encoding='utf-8') as f:
+    #         f.write(ai_response)
+    #     print(f"Saved default text response to {response_file}")
+
+    # Second pass: handle any images
+    for msg in reversed(messages.data):
+        if msg.role != "user" and hasattr(msg.content[0], "image_file"):
             print("AI: [Image file received]")
-            file_id = message.content[0].image_file.file_id
+            file_id = msg.content[0].image_file.file_id
             file_url = f"https://api.openai.com/v1/files/{file_id}/content"
             headers = {"Authorization": f"Bearer {openai.api_key}"}
             print("Downloading image...")
             image_data = requests.get(file_url, headers=headers)
             if image_data.status_code == 200:
-                os.makedirs('files', exist_ok=True)  # Ensure the 'files' directory exists
-                filename = f"files/{tweet_id}.png"
-                with open(filename, "wb") as f:
-                    f.write(image_data.content)
-                print(f"Image saved {filename}")
-                img = Image.open(filename)
-                img.show()  
+                image_path = f"files/{tweet_id}_image.png"
+                with open(image_path, "wb") as imgf:
+                    imgf.write(image_data.content)
+                print(f"Image saved to {image_path}")
             else:
                 print("Failed to download the image.")
         else:
-            print("AI: [Unsupported content type]")
+            print("AI: [Unsupported content type or user message]")
 
-    # After successful processing, just log the tweet ID
-    tweet_id = tweet_data[tweet]  # Get the ID for this tweet
-    
-    # Save the raw AI response to a text file
-    os.makedirs('responses', exist_ok=True)
-    response_file = f'responses/{tweet_id}.txt'
-    with open(response_file, 'w', encoding='utf-8') as f:
-        f.write(ai_response)  # Just save the raw AI response
-    print(f"Saved response to {response_file}")
+    # Always run the reply script with the text response
+    try:
+        result = subprocess.run(
+            ["python", "reply_single_tweet.py", tweet_id, ai_response],
+            # [
+            #     "python",
+            #     "reply_single_tweet.py",
+            #     str(tweet_id),       # Ensure it's a string
+            #     str(ai_response)     # Ensure it's a string
+            # ],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print(f"Reply script output: {result.stdout}")
+        print("Successfully sent reply to Twitter")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to send reply to Twitter. Error code: {e.returncode}")
+        print(f"Error output: {e.stderr}")
+        print(f"Standard output: {e.stdout}")
 
     # Log the processed tweet ID
     with open('data/processed_tweet_ids.txt', 'a') as f:

@@ -20,3 +20,5 @@ $HOME/.pyenv/shims/python $HOME/the-fight-predictor-agent/PRODUCTION/assistant_f
 
 echo "Completed Agent: $(date)" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
 echo "------------------------------------------------" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
+echo "------------------------------------------------" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
+echo "------------------------------------------------" >> $HOME/the-fight-predictor-agent/PRODUCTION/cron.log
