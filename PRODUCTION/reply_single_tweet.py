@@ -34,8 +34,29 @@ client = tweepy.Client(
 
 try:
     # Check for image files with the tweet ID prefix
-    # image_files = glob.glob(f"files/{tweet_id}*.*")
-    # image_files = glob.glob(f"/home/trinity/the-fight-predictor-agent/PRODUCTION/files/{tweet_id}*.*")
+    # # image_files = glob.glob(f"files/{tweet_id}*.*")
+    # # image_files = glob.glob(f"/home/trinity/the-fight-predictor-agent/PRODUCTION/files/{tweet_id}*.*")
+    # image_file = f"/home/trinity/the-fight-predictor-agent/PRODUCTION/files/{tweet_id}.png"
+    # media_ids = []
+
+    # if os.path.exists(image_file):
+    #     media = api.media_upload(image_file)
+    #     media_ids.append(media.media_id)
+    #     response = client.create_tweet(
+    #         text=reply_text,
+    #         in_reply_to_tweet_id=tweet_id,  # Reply to the tweet
+    #         # quote_tweet_id=tweet_id,  # Quote the tweet
+    #         media_ids=media_ids,  # Attach media if available
+    #         # geo={'place_id': '3b77caf94bfc81fe'},  # Las Vegas geo-tagging
+    #     )
+    # else:
+    #     response = client.create_tweet(
+    #         text=reply_text,
+    #         in_reply_to_tweet_id=tweet_id, # Reply to the tweet
+    #         # quote_tweet_id=tweet_id,  # Quote the tweet
+    #         # geo={'place_id': '3b77caf94bfc81fe'}  # Las Vegas geo-tagging
+    #     )
+
     image_file = f"/home/trinity/the-fight-predictor-agent/PRODUCTION/files/{tweet_id}.png"
     media_ids = []
 
@@ -44,16 +65,17 @@ try:
         media_ids.append(media.media_id)
         response = client.create_tweet(
             text=reply_text,
-            quote_tweet_id=tweet_id,  # Quote the tweet
+            in_reply_to_tweet_id=tweet_id,  # Reply to the tweet
             media_ids=media_ids,  # Attach media if available
-            # geo={'place_id': '3b77caf94bfc81fe'},  # Las Vegas geo-tagging
         )
     else:
         response = client.create_tweet(
             text=reply_text,
-            quote_tweet_id=tweet_id,  # Quote the tweet
-            # geo={'place_id': '3b77caf94bfc81fe'}  # Las Vegas geo-tagging
+            in_reply_to_tweet_id=tweet_id  # Reply to the tweet
         )
+
+    print(f"Tweeted with ID: {response.data['id']}")
+
 
     # # Create the tweet, with or without media
     # response = client.create_tweet(
@@ -65,7 +87,7 @@ try:
 
 
     # print(f"Replied to tweet {tweet_id} with ID: {response.data['id']}")
-    print(f"Tweeted with ID: {response.data['id']}")
+    # print(f"Tweeted with ID: {response.data['id']}")
 
 
 except tweepy.errors.Forbidden as e:

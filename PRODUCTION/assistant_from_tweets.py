@@ -99,28 +99,55 @@ for tweet in tweets:
     messages = client.beta.threads.messages.list(thread_id=thread_id)
 
     tweet_id = tweet_data[tweet]
-    ai_response = None
-
-    # ai_response_text = None  # Initialize ai_response_text variable before processing messages
-    # ai_response_image = None  # Initialize ai_response_image variable
     # ai_response = None
 
-    # First pass: gather the AI's text (if any)
+    # # ai_response_text = None  # Initialize ai_response_text variable before processing messages
+    # # ai_response_image = None  # Initialize ai_response_image variable
+    # # ai_response = None
+
+    # # First pass: gather the AI's text (if any)
+    # for msg in messages.data:
+    #     if msg.role != "user" and hasattr(msg.content[0], "text"):
+    #         # Capture the assistant's text
+    #         ai_response = msg.content[0].text.value
+    #         print(f"AI Text: {ai_response}")
+
+    #         # Save the AI text response immediately
+    #         os.makedirs('responses', exist_ok=True)
+    #         response_file = f"responses/{tweet_id}.txt"
+    #         with open(response_file, 'a', encoding='utf-8') as f:
+    #             f.write(ai_response + "\n\n")
+    #         print(f"Appended AI text: {ai_response}")
+
+    #         # Since we've found the most recent text from the assistant, break out
+    #         break
+    # Initialize ai_response to None
+    ai_response = None
+
+    # Iterate over each message in the data
     for msg in messages.data:
-        if msg.role != "user" and hasattr(msg.content[0], "text"):
-            # Capture the assistant's text
-            ai_response = msg.content[0].text.value
-            print(f"AI Text: {ai_response}")
+        # Check if the message is from the assistant and has content
+        if msg.role == "assistant" and hasattr(msg, "content"):
+            # Iterate over each content block in the message
+            for content_block in msg.content:
+                # Check if the content block is of type 'text' and has a 'text' attribute
+                if content_block.type == "text" and hasattr(content_block, "text"):
+                    # Extract the text value
+                    ai_response = content_block.text.value.strip()
+                    print(f"Extracted AI Response: {ai_response}")
+                    break  # Exit the loop after finding the first valid response
+            if ai_response:
+                break  # Exit the outer loop if a response has been found
 
-            # Save the AI text response immediately
-            os.makedirs('responses', exist_ok=True)
-            response_file = f"responses/{tweet_id}.txt"
-            with open(response_file, 'a', encoding='utf-8') as f:
-                f.write(ai_response + "\n\n")
-            print(f"Appended AI text: {ai_response}")
+    # Handle the case where no valid AI response was found
+    if not ai_response:
+        print("No valid AI response found in messages.")
 
-            # Since we've found the most recent text from the assistant, break out
-            break
+    # Save AI response to file
+    response_file = f"responses/{tweet_data[tweet]}.txt"
+    with open(response_file, 'w', encoding='utf-8') as f:
+        f.write(ai_response)
+
 
     # # If nothing found, default to a message
     # if ai_response is None:
@@ -142,7 +169,7 @@ for tweet in tweets:
             print("Downloading image...")
             image_data = requests.get(file_url, headers=headers)
             if image_data.status_code == 200:
-                image_path = f"files/{tweet_id}_image.png"
+                image_path = f"files/{tweet_id}.png"
                 with open(image_path, "wb") as imgf:
                     imgf.write(image_data.content)
                 print(f"Image saved to {image_path}")
