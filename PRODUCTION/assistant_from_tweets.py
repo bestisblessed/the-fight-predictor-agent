@@ -7,9 +7,11 @@ from PIL import Image
 import io
 from docx import Document
 import subprocess
+
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
+
 if not openai.api_key:
     print("API key is required to run the chatbot.")
     exit()
@@ -127,7 +129,8 @@ for tweet in tweets:
             print("Downloading image...")
             image_data = requests.get(file_url, headers=headers)
             if image_data.status_code == 200:
-                filename = f"data/assistant_image_{int(time.time())}.png"
+                os.makedirs('files', exist_ok=True)  # Ensure the 'files' directory exists
+                filename = f"files/{tweet_id}.png"
                 with open(filename, "wb") as f:
                     f.write(image_data.content)
                 print(f"Image saved {filename}")
