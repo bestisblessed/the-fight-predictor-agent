@@ -54,7 +54,7 @@ def export_file(file_id, file_name, mime_type):
         print(f"An error occurred: {e}")
         
 # Replace 'file_id' and 'file_name' with your actual file ID and desired download name
-file_id = '1YTd9zqq4lhNrZZXU4JJzbSgo-uUeuzcQq0oBYOS5lvk'
+file_id = '1LExiqIf1oabiXtROiabHscZ0ywatB8u73FQ4vOA88Rw'
 file_name = os.path.join('data', 'TheFightAgentMentions.docx')  # Add the correct extension and data directory
 mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 export_file(file_id, file_name, mime_type)

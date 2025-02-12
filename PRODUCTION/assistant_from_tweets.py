@@ -92,6 +92,7 @@ for tweet in tweets:
         thread_id=thread_id,
         assistant_id=assistant_mma_handicapper
     )
+    print(f"Run created with ID: {run.id}")
     print("Processing...")
     while run.status != "completed":
         time.sleep(2)
