@@ -10,7 +10,8 @@ import subprocess
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
+# assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
+assistant_mma_handicapper = 'asst_WNljg0776aJ70GA0nLX3y49p' # Clone
 
 if not openai.api_key:
     print("API key is required to run the chatbot.")
