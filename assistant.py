@@ -173,8 +173,8 @@ def process_message(user_input, file_ids, conversation_id=None):
             }
         ],
         "tools": tools if tools else None,
-        "temperature": 0.7,
         "store": True  # Enable conversation storage
+        # Note: temperature not supported by gpt-5-mini (reasoning model)
     }
     
     # Continue conversation if we have a previous response ID

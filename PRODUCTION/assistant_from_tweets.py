@@ -190,8 +190,8 @@ def process_tweet_with_responses_api(tweet_text, file_ids):
             }
         ],
         tools=tools if tools else None,
-        temperature=0.7,
         max_output_tokens=1000
+        # Note: temperature not supported by gpt-5-mini (reasoning model)
     )
     
     # Parse the response output
