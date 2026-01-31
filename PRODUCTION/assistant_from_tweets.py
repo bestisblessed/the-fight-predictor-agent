@@ -1,36 +1,52 @@
-import openai
-import time
-import requests
 import os
-from dotenv import load_dotenv
-from PIL import Image
-import io
-from docx import Document
 import subprocess
+import sys
+import time
+from pathlib import Path
+
+import openai
+from dotenv import load_dotenv
+from docx import Document
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from responses_api_utils import (
+    create_response,
+    default_cache_path,
+    extract_file_entries,
+    extract_text,
+    get_dataset_file_ids,
+    save_response_image,
+)
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
 
 if not openai.api_key:
     print("API key is required to run the chatbot.")
     exit()
 print("MMA AI Chatbot Initialized - Processing Tweets.")
 client = openai.OpenAI(api_key=openai.api_key)
-os.makedirs('data', exist_ok=True)
-os.makedirs('responses', exist_ok=True)
-os.makedirs('files', exist_ok=True)
-thread_id = None
-tweets_file = 'data/TheFightAgentMentions.docx'
+
+MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+SYSTEM_PROMPT = os.getenv("OPENAI_SYSTEM_PROMPT")
+DATA_DIR = os.getenv("DATA_DIR", "data")
+
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs("responses", exist_ok=True)
+os.makedirs("files", exist_ok=True)
+
+tweets_file = os.path.join(DATA_DIR, "TheFightAgentMentions.docx")
 # tweets_file = 'data/TheFightAgentMentionsCombined.docx'
 document = Document(tweets_file)
 tweets = []
 tweet_data = {}  # Store both tweet text and ID together
 
 # After initial imports and before processing tweets, load processed IDs
+processed_ids_file = os.path.join(DATA_DIR, "processed_tweet_ids.txt")
 processed_ids = set()
 try:
-    with open('data/processed_tweet_ids.txt', 'r') as f:
+    with open(processed_ids_file, "r") as f:
         processed_ids = {line.strip() for line in f if line.strip()}
     # print(f"Loaded {len(processed_ids)} processed tweet IDs")
 except FileNotFoundError:
@@ -39,7 +55,7 @@ except FileNotFoundError:
 # print(f"\nDebug: Loaded processed IDs: {processed_ids}")
 
 # Path to the docx file containing tweets
-tweets_file = 'data/TheFightAgentMentions.docx'
+tweets_file = os.path.join(DATA_DIR, "TheFightAgentMentions.docx")
 # tweets_file = 'data/TheFightAgentMentionsCombined.docx'
 document = Document(tweets_file)
 tweets = []
@@ -74,75 +90,37 @@ if not tweets:
 
 print(f"Found {len(tweets)} new tweets to process.")
 
+try:
+    dataset_file_ids = get_dataset_file_ids(
+        client,
+        data_dir=DATA_DIR,
+        cache_path=default_cache_path(DATA_DIR),
+    )
+except FileNotFoundError as exc:
+    print(str(exc))
+    exit()
+
 for tweet in tweets:
     print(f"\nTweet: {tweet}")
     
-    # Create a new thread for each tweet
-    thread = client.beta.threads.create()
-    thread_id = thread.id
-    print(f"New conversation started with Thread ID: {thread_id}")
-
-    message = client.beta.threads.messages.create(
-        thread_id=thread_id,
-        role="user",
-        content=tweet
+    response = create_response(
+        client,
+        MODEL,
+        tweet,
+        dataset_file_ids,
+        system_prompt=SYSTEM_PROMPT,
     )
-
-    run = client.beta.threads.runs.create(
-        thread_id=thread_id,
-        assistant_id=assistant_mma_handicapper
-    )
-    print(f"Run created with ID: {run.id}")
     print("Processing...")
-    while run.status != "completed":
-        time.sleep(2)
-        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-    messages = client.beta.threads.messages.list(thread_id=thread_id)
 
     tweet_id = tweet_data[tweet]
-    # ai_response = None
 
-    # # ai_response_text = None  # Initialize ai_response_text variable before processing messages
-    # # ai_response_image = None  # Initialize ai_response_image variable
-    # # ai_response = None
-
-    # # First pass: gather the AI's text (if any)
-    # for msg in messages.data:
-    #     if msg.role != "user" and hasattr(msg.content[0], "text"):
-    #         # Capture the assistant's text
-    #         ai_response = msg.content[0].text.value
-    #         print(f"AI Text: {ai_response}")
-
-    #         # Save the AI text response immediately
-    #         os.makedirs('responses', exist_ok=True)
-    #         response_file = f"responses/{tweet_id}.txt"
-    #         with open(response_file, 'a', encoding='utf-8') as f:
-    #             f.write(ai_response + "\n\n")
-    #         print(f"Appended AI text: {ai_response}")
-
-    #         # Since we've found the most recent text from the assistant, break out
-    #         break
-    # Initialize ai_response to None
-    ai_response = None
-
-    # Iterate over each message in the data
-    for msg in messages.data:
-        # Check if the message is from the assistant and has content
-        if msg.role == "assistant" and hasattr(msg, "content"):
-            # Iterate over each content block in the message
-            for content_block in msg.content:
-                # Check if the content block is of type 'text' and has a 'text' attribute
-                if content_block.type == "text" and hasattr(content_block, "text"):
-                    # Extract the text value
-                    ai_response = content_block.text.value.strip()
-                    print(f"Extracted AI Response: {ai_response}")
-                    break  # Exit the loop after finding the first valid response
-            if ai_response:
-                break  # Exit the outer loop if a response has been found
-
-    # Handle the case where no valid AI response was found
+    ai_response = extract_text(response)
     if not ai_response:
-        print("No valid AI response found in messages.")
+        print("No valid AI response found in response output.")
+        continue
+
+    print(f"Extracted AI Response: {ai_response}")
+    file_entries = extract_file_entries(response)
 
     # Save AI response to file
     response_file = f"responses/{tweet_data[tweet]}.txt"
@@ -160,24 +138,17 @@ for tweet in tweets:
     #         f.write(ai_response)
     #     print(f"Saved default text response to {response_file}")
 
-    # Second pass: handle any images
-    for msg in reversed(messages.data):
-        if msg.role != "user" and hasattr(msg.content[0], "image_file"):
-            print("AI: [Image file received]")
-            file_id = msg.content[0].image_file.file_id
-            file_url = f"https://api.openai.com/v1/files/{file_id}/content"
-            headers = {"Authorization": f"Bearer {openai.api_key}"}
-            print("Downloading image...")
-            image_data = requests.get(file_url, headers=headers)
-            if image_data.status_code == 200:
-                image_path = f"files/{tweet_id}.png"
-                with open(image_path, "wb") as imgf:
-                    imgf.write(image_data.content)
-                print(f"Image saved to {image_path}")
-            else:
-                print("Failed to download the image.")
-        else:
-            print("AI: [Unsupported content type or user message]")
+    # Save output image if returned
+    if file_entries:
+        image_path = f"files/{tweet_id}.png"
+        saved_image = save_response_image(
+            client,
+            file_entries,
+            image_path,
+            api_key=openai.api_key,
+        )
+        if saved_image:
+            print(f"Image saved to {saved_image}")
 
     # Always run the reply script with the text response
     try:
@@ -201,7 +172,7 @@ for tweet in tweets:
         print(f"Standard output: {e.stdout}")
 
     # Log the processed tweet ID
-    with open('data/processed_tweet_ids.txt', 'a') as f:
+    with open(processed_ids_file, "a") as f:
         f.write(f"{tweet_id}")
         f.write("")  # Platform-independent newline
         f.write("\n")  # Platform-independent newline

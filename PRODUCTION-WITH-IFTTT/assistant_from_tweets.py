@@ -1,41 +1,54 @@
-import openai
-import time
-import requests
 import os
-from dotenv import load_dotenv
-from PIL import Image
-import io
-from docx import Document
 import subprocess
+import sys
+import time
+from pathlib import Path
+
+import openai
+from dotenv import load_dotenv
+from docx import Document
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 import pickle
-import os.path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from responses_api_utils import (
+    create_response,
+    default_cache_path,
+    extract_text,
+    get_dataset_file_ids,
+)
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-assistant_mma_handicapper = 'asst_zahT75OFBs5jgi346C9vuzKa' 
 if not openai.api_key:
     print("API key is required to run the chatbot.")
     exit()
 print("MMA AI Chatbot Initialized - Processing Tweets.")
 client = openai.OpenAI(api_key=openai.api_key)
-os.makedirs('data', exist_ok=True)
-os.makedirs('responses', exist_ok=True)
-os.makedirs('files', exist_ok=True)
-thread_id = None
-tweets_file = 'data/TheFightAgentMentions.docx'
+
+MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+SYSTEM_PROMPT = os.getenv("OPENAI_SYSTEM_PROMPT")
+DATA_DIR = os.getenv("DATA_DIR", "data")
+
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs("responses", exist_ok=True)
+os.makedirs("files", exist_ok=True)
+
+tweets_file = os.path.join(DATA_DIR, "TheFightAgentMentions.docx")
 document = Document(tweets_file)
 tweets = []
 tweet_data = {}  
+processed_ids_file = os.path.join(DATA_DIR, "processed_tweet_ids.txt")
 processed_ids = set()
 try:
-    with open('data/processed_tweet_ids.txt', 'r') as f:
+    with open(processed_ids_file, "r") as f:
         processed_ids = {line.strip() for line in f if line.strip()}
 except FileNotFoundError:
     print("No previous tweet ID log found, starting fresh")
-tweets_file = 'data/TheFightAgentMentions.docx'
+tweets_file = os.path.join(DATA_DIR, "TheFightAgentMentions.docx")
 document = Document(tweets_file)
 tweets = []
 tweet_data = {}  
@@ -90,6 +103,16 @@ def get_google_sheets_service():
 SPREADSHEET_ID = '1ojtQSsgGk2hzBeSmxsv_Q1phgWzN0SQbwiKPFkkOYic'
 service = get_google_sheets_service()
 
+try:
+    dataset_file_ids = get_dataset_file_ids(
+        client,
+        data_dir=DATA_DIR,
+        cache_path=default_cache_path(DATA_DIR),
+    )
+except FileNotFoundError as exc:
+    print(str(exc))
+    exit()
+
 for tweet in tweets:
     print(f"\nTweet: {tweet}")
     tweet_id = tweet_data[tweet]
@@ -113,60 +136,42 @@ for tweet in tweets:
             print(f"Response for tweet ID {tweet_id} already exists. Using existing response.")
             ai_response = existing_response
         else:
-            # Generate new response using OpenAI
-            thread = client.beta.threads.create()
-            thread_id = thread.id
-            print(f"New conversation started with Thread ID: {thread_id}")
-            message = client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=tweet
-            )
-            run = client.beta.threads.runs.create(
-                thread_id=thread_id,
-                assistant_id=assistant_mma_handicapper
+            # Generate new response using OpenAI Responses API
+            response = create_response(
+                client,
+                MODEL,
+                tweet,
+                dataset_file_ids,
+                system_prompt=SYSTEM_PROMPT,
             )
             print("Processing...")
-            while run.status != "completed":
-                time.sleep(2)
-                run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            ai_response = None
-            for msg in messages.data:
-                if msg.role == "assistant":
-                    for content in msg.content:
-                        if hasattr(content, 'text'):
-                            ai_response = content.text.value.strip()
-                            print(f"Extracted AI Response: {ai_response}")
-                            break
-                    if ai_response:
-                        break
-                        
+            ai_response = extract_text(response)
             if not ai_response:
-                print("No valid AI response found in messages.")
+                print("No valid AI response found in response output.")
                 continue  # Skip to next tweet if no valid response
-                
+
+            print(f"Extracted AI Response: {ai_response}")
+
             # Only proceed with spreadsheet writing if we have a valid response
-            if ai_response:
-                # Save response to local file
-                response_file_path = f'responses/{tweet_id}.txt'
-                try:
-                    with open(response_file_path, 'w', encoding='utf-8') as f:
-                        f.write(ai_response)
-                    print(f"Saved response to {response_file_path}")
-                    
-                    # Write to spreadsheet
-                    values = [[tweet_id, ai_response]]
-                    body = {'values': values}
-                    service.spreadsheets().values().append(
-                        spreadsheetId=SPREADSHEET_ID,
-                        range='Sheet1!A:B',
-                        valueInputOption='RAW',
-                        body=body
-                    ).execute()
-                except Exception as e:
-                    print(f"Error saving response file: {e}")
-                    continue
+            # Save response to local file
+            response_file_path = f"responses/{tweet_id}.txt"
+            try:
+                with open(response_file_path, "w", encoding="utf-8") as f:
+                    f.write(ai_response)
+                print(f"Saved response to {response_file_path}")
+
+                # Write to spreadsheet
+                values = [[tweet_id, ai_response]]
+                body = {"values": values}
+                service.spreadsheets().values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range="Sheet1!A:B",
+                    valueInputOption="RAW",
+                    body=body,
+                ).execute()
+            except Exception as e:
+                print(f"Error saving response file: {e}")
+                continue
             
         # Use the response to reply on Twitter
         success = False
@@ -189,7 +194,7 @@ for tweet in tweets:
             print(f"Standard output: {e.stdout}")
 
         if success:
-            with open('data/processed_tweet_ids.txt', 'a') as f:
+            with open(processed_ids_file, "a") as f:
                 f.write(f"{tweet_id}")
                 f.write("")  
                 f.write("\n")  
