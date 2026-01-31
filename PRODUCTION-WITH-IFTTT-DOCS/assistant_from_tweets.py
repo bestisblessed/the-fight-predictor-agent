@@ -169,8 +169,9 @@ def process_tweet_with_responses_api(tweet_text, file_ids):
             }
         })
     
+    # Model options: "gpt-5-mini" (balanced), "gpt-5-nano" (cheapest), "gpt-4.1-mini" (fallback)
     response = client.responses.create(
-        model="gpt-4o",
+        model="gpt-5-mini",
         instructions=SYSTEM_INSTRUCTIONS,
         input=[
             {

@@ -176,8 +176,12 @@ def process_tweet_with_responses_api(tweet_text, file_ids):
         })
     
     # Create the response using the Responses API
+    # Model options (non-pro, cost-effective):
+    #   - "gpt-5-mini": Best balance of capability and cost for well-defined tasks
+    #   - "gpt-5-nano": Fastest and cheapest, good for simple queries
+    #   - "gpt-4.1-mini": Reliable fallback, non-reasoning model
     response = client.responses.create(
-        model="gpt-4o",  # or "gpt-4o-mini" for faster/cheaper responses
+        model="gpt-5-mini",  # Recommended for MMA analysis tasks
         instructions=SYSTEM_INSTRUCTIONS,
         input=[
             {

@@ -159,8 +159,12 @@ def process_message(user_input, file_ids, conversation_id=None):
         })
     
     # Build request parameters
+    # Model options (non-pro, cost-effective):
+    #   - "gpt-5-mini": Best balance of capability and cost for well-defined tasks
+    #   - "gpt-5-nano": Fastest and cheapest, good for simple queries  
+    #   - "gpt-4.1-mini": Reliable fallback, non-reasoning model
     request_params = {
-        "model": "gpt-4o",
+        "model": "gpt-5-mini",
         "instructions": SYSTEM_INSTRUCTIONS,
         "input": [
             {
