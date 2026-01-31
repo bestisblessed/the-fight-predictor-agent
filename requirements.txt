@@ -1,0 +1,22 @@
+# OpenAI API (Responses API requires >= 1.12.0)
+openai>=2.0.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Document processing
+python-docx>=0.8.11
+
+# Image handling
+Pillow>=10.0.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Data analysis (for tott generators)
+pandas>=2.0.0
+
+# Google API (for IFTTT variants)
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.95.0
