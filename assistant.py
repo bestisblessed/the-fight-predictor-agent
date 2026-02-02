@@ -183,16 +183,32 @@ def process_message(user_input, file_ids, conversation_id=None):
     
     response = client.responses.create(**request_params)
     
+    print(f"Response ID: {response.id}, Status: {response.status}")
+    
     # Parse the response
     text_response = None
     image_url = None
     
     for output_item in response.output:
+        # Handle text messages
         if output_item.type == "message":
             for content_block in output_item.content:
-                if hasattr(content_block, 'text'):
+                # Handle different text content structures
+                if content_block.type == "output_text":
                     text_response = content_block.text
                     break
+                elif hasattr(content_block, 'text'):
+                    if isinstance(content_block.text, str):
+                        text_response = content_block.text
+                    elif hasattr(content_block.text, 'value'):
+                        text_response = content_block.text.value
+                    else:
+                        text_response = str(content_block.text)
+                    break
+            if text_response:
+                break
+        
+        # Handle code interpreter outputs (for images)
         elif output_item.type == "code_interpreter_call":
             if output_item.outputs:
                 for output in output_item.outputs:

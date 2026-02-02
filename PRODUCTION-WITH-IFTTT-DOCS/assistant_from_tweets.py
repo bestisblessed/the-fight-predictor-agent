@@ -170,37 +170,56 @@ def process_tweet_with_responses_api(tweet_text, file_ids):
         })
     
     # Model options: "gpt-5-mini" (balanced), "gpt-5-nano" (cheapest), "gpt-4.1-mini" (fallback)
-    response = client.responses.create(
-        model="gpt-5-mini",
-        instructions=SYSTEM_INSTRUCTIONS,
-        input=[
-            {
-                "role": "user",
-                "content": tweet_text
-            }
-        ],
-        tools=tools if tools else None,
-        max_output_tokens=1000
-        # Note: temperature not supported by gpt-5-mini (reasoning model)
-    )
-    
-    text_response = None
-    image_url = None
-    
-    for output_item in response.output:
-        if output_item.type == "message":
-            for content_block in output_item.content:
-                if hasattr(content_block, 'text'):
-                    text_response = content_block.text
-                    break
-        elif output_item.type == "code_interpreter_call":
-            if output_item.outputs:
-                for output in output_item.outputs:
-                    if output.type == "image":
-                        image_url = output.url
+    try:
+        response = client.responses.create(
+            model="gpt-5-mini",
+            instructions=SYSTEM_INSTRUCTIONS,
+            input=[
+                {
+                    "role": "user",
+                    "content": tweet_text
+                }
+            ],
+            tools=tools if tools else None,
+            max_output_tokens=1000
+            # Note: temperature not supported by gpt-5-mini (reasoning model)
+        )
+        
+        print(f"Response ID: {response.id}, Status: {response.status}")
+        
+        text_response = None
+        image_url = None
+        
+        for output_item in response.output:
+            if output_item.type == "message":
+                for content_block in output_item.content:
+                    if content_block.type == "output_text":
+                        text_response = content_block.text
                         break
-    
-    return text_response, image_url
+                    elif hasattr(content_block, 'text'):
+                        if isinstance(content_block.text, str):
+                            text_response = content_block.text
+                        elif hasattr(content_block.text, 'value'):
+                            text_response = content_block.text.value
+                        else:
+                            text_response = str(content_block.text)
+                        break
+                if text_response:
+                    break
+            elif output_item.type == "code_interpreter_call":
+                if output_item.outputs:
+                    for output in output_item.outputs:
+                        if output.type == "image":
+                            image_url = output.url
+                            break
+        
+        return text_response, image_url
+        
+    except Exception as e:
+        print(f"Error in API call: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
 
 
 # ============================================================================

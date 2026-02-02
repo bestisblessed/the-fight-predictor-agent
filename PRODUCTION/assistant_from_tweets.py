@@ -175,46 +175,80 @@ def process_tweet_with_responses_api(tweet_text, file_ids):
             }
         })
     
-    # Create the response using the Responses API
-    # Model options (non-pro, cost-effective):
-    #   - "gpt-5-mini": Best balance of capability and cost for well-defined tasks
-    #   - "gpt-5-nano": Fastest and cheapest, good for simple queries
-    #   - "gpt-4.1-mini": Reliable fallback, non-reasoning model
-    response = client.responses.create(
-        model="gpt-5-mini",  # Recommended for MMA analysis tasks
-        instructions=SYSTEM_INSTRUCTIONS,
-        input=[
-            {
-                "role": "user",
-                "content": tweet_text
-            }
-        ],
-        tools=tools if tools else None,
-        max_output_tokens=1000
-        # Note: temperature not supported by gpt-5-mini (reasoning model)
-    )
-    
-    # Parse the response output
-    text_response = None
-    image_url = None
-    
-    for output_item in response.output:
-        # Handle text messages
-        if output_item.type == "message":
-            for content_block in output_item.content:
-                if hasattr(content_block, 'text'):
-                    text_response = content_block.text
-                    break
+    try:
+        # Create the response using the Responses API
+        # Model options (non-pro, cost-effective):
+        #   - "gpt-5-mini": Best balance of capability and cost for well-defined tasks
+        #   - "gpt-5-nano": Fastest and cheapest, good for simple queries
+        #   - "gpt-4.1-mini": Reliable fallback, non-reasoning model
+        response = client.responses.create(
+            model="gpt-5-mini",  # Recommended for MMA analysis tasks
+            instructions=SYSTEM_INSTRUCTIONS,
+            input=[
+                {
+                    "role": "user",
+                    "content": tweet_text
+                }
+            ],
+            tools=tools if tools else None,
+            max_output_tokens=1000
+            # Note: temperature not supported by gpt-5-mini (reasoning model)
+        )
         
-        # Handle code interpreter outputs (for images)
-        elif output_item.type == "code_interpreter_call":
-            if output_item.outputs:
-                for output in output_item.outputs:
-                    if output.type == "image":
-                        image_url = output.url
+        print(f"Response ID: {response.id}")
+        print(f"Response status: {response.status}")
+        
+        # Parse the response output
+        text_response = None
+        image_url = None
+        
+        # Debug: print output structure
+        print(f"Number of output items: {len(response.output)}")
+        
+        for i, output_item in enumerate(response.output):
+            print(f"Output item {i}: type={output_item.type}")
+            
+            # Handle text messages
+            if output_item.type == "message":
+                for j, content_block in enumerate(output_item.content):
+                    print(f"  Content block {j}: type={content_block.type}")
+                    
+                    # Handle different text content structures
+                    if content_block.type == "output_text":
+                        # New format: output_text type with text attribute
+                        text_response = content_block.text
+                        print(f"  Extracted text (output_text): {text_response[:100]}..." if text_response and len(text_response) > 100 else f"  Extracted text: {text_response}")
                         break
-    
-    return text_response, image_url
+                    elif hasattr(content_block, 'text'):
+                        # Check if text is a string or an object with value
+                        if isinstance(content_block.text, str):
+                            text_response = content_block.text
+                        elif hasattr(content_block.text, 'value'):
+                            text_response = content_block.text.value
+                        else:
+                            text_response = str(content_block.text)
+                        print(f"  Extracted text: {text_response[:100]}..." if text_response and len(text_response) > 100 else f"  Extracted text: {text_response}")
+                        break
+                
+                if text_response:
+                    break
+            
+            # Handle code interpreter outputs (for images)
+            elif output_item.type == "code_interpreter_call":
+                if output_item.outputs:
+                    for output in output_item.outputs:
+                        if output.type == "image":
+                            image_url = output.url
+                            print(f"  Found image URL: {image_url}")
+                            break
+        
+        return text_response, image_url
+        
+    except Exception as e:
+        print(f"Error in process_tweet_with_responses_api: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
 
 
 def download_image(image_url, save_path):
