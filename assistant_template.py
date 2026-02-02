@@ -20,7 +20,8 @@ params = {
     "instructions": "You are The Fight Agent. Use the datasets for analysis.",
     "input": [{"role": "user", "content": query}],
     "max_output_tokens": 5000,
-    "reasoning": {"effort": "medium"}
+    "reasoning": {"effort": "medium"},
+    "include": ["code_interpreter_call.outputs"]
 }
 if file_ids:
     params["tools"] = [{"type": "code_interpreter", "container": {"type": "auto", "file_ids": file_ids}}]
@@ -40,13 +41,21 @@ for out in resp.output:
         
         # Ensure outputs is iterable even if None
         outputs = getattr(out, 'outputs', []) or []
-        for ci_out in outputs:
+        for i, ci_out in enumerate(outputs):
             if ci_out.type == "logs":
-                # Optionally print logs if you want to see standard output
-                pass 
+                print(f"\n[Code Interpreter Logs]:\n{ci_out.logs}") 
             elif ci_out.type == "image":
-                img_path = f"data/img_{int(time.time())}.png"
+                img_path = f"data/img_{int(time.time())}_{i}.png"
                 os.makedirs('data', exist_ok=True)
-                with open(img_path, "wb") as f: f.write(requests.get(ci_out.url).content)
+                
+                url = ci_out.url
+                if url.startswith('data:'):
+                    import base64
+                    header, encoded = url.split(",", 1)
+                    data = base64.b64decode(encoded)
+                    with open(img_path, "wb") as f: f.write(data)
+                else:
+                    with open(img_path, "wb") as f: f.write(requests.get(url).content)
+                
                 print(f"[Image generated and saved to {img_path}]")
                 Image.open(img_path).show()
