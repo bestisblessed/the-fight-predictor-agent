@@ -148,6 +148,8 @@ Response style:
 - Keep responses Twitter-friendly (concise but substantive)
 """
 
+MAX_OUTPUT_TOKENS = 7500
+
 
 # ============================================================================
 # Response Processing with Responses API
@@ -175,46 +177,151 @@ def process_tweet_with_responses_api(tweet_text, file_ids):
             }
         })
     
-    # Create the response using the Responses API
-    # Model options (non-pro, cost-effective):
-    #   - "gpt-5-mini": Best balance of capability and cost for well-defined tasks
-    #   - "gpt-5-nano": Fastest and cheapest, good for simple queries
-    #   - "gpt-4.1-mini": Reliable fallback, non-reasoning model
-    response = client.responses.create(
-        model="gpt-5-mini",  # Recommended for MMA analysis tasks
-        instructions=SYSTEM_INSTRUCTIONS,
-        input=[
-            {
-                "role": "user",
-                "content": tweet_text
-            }
-        ],
-        tools=tools if tools else None,
-        max_output_tokens=1000
-        # Note: temperature not supported by gpt-5-mini (reasoning model)
-    )
-    
-    # Parse the response output
-    text_response = None
-    image_url = None
-    
-    for output_item in response.output:
-        # Handle text messages
-        if output_item.type == "message":
-            for content_block in output_item.content:
-                if hasattr(content_block, 'text'):
-                    text_response = content_block.text
-                    break
+    def extract_response_output(response):
+        text_response = None
+        image_url = None
         
-        # Handle code interpreter outputs (for images)
-        elif output_item.type == "code_interpreter_call":
-            if output_item.outputs:
-                for output in output_item.outputs:
-                    if output.type == "image":
-                        image_url = output.url
-                        break
-    
-    return text_response, image_url
+        output_text = getattr(response, "output_text", None)
+        if output_text:
+            text_response = output_text
+            print(f"Extracted text from output_text: {text_response[:100]}..." if len(text_response) > 100 else f"Extracted text: {text_response}")
+        
+        output_items = getattr(response, "output", None) or []
+        print(f"Number of output items: {len(output_items)}")
+        
+        for i, output_item in enumerate(output_items):
+            item_type = getattr(output_item, "type", None)
+            print(f"Output item {i}: type={item_type}")
+            
+            # Handle text messages
+            if item_type == "message":
+                content_items = getattr(output_item, "content", None) or []
+                for j, content_block in enumerate(content_items):
+                    block_type = getattr(content_block, "type", None)
+                    print(f"  Content block {j}: type={block_type}")
+                    
+                    if block_type == "output_text" and not text_response:
+                        text_attr = getattr(content_block, "text", None)
+                        if text_attr:
+                            text_response = text_attr if isinstance(text_attr, str) else str(text_attr)
+                            print(f"  Extracted text (output_text): {text_response[:100]}..." if len(text_response) > 100 else f"  Extracted text: {text_response}")
+                            break
+                    elif block_type == "output_message" and not text_response:
+                        text_attr = getattr(content_block, "text", None)
+                        if text_attr:
+                            if isinstance(text_attr, str):
+                                text_response = text_attr
+                            elif hasattr(text_attr, "value"):
+                                text_response = text_attr.value
+                            else:
+                                text_response = str(text_attr)
+                            print(f"  Extracted text: {text_response[:100]}..." if len(text_response) > 100 else f"  Extracted text: {text_response}")
+                            break
+                
+                if text_response:
+                    break
+            
+            # Handle code interpreter outputs (for images and logs)
+            elif item_type == "code_interpreter_call":
+                output_list = getattr(output_item, "outputs", None) or []
+                for output in output_list:
+                    output_type = getattr(output, "type", None)
+                    if output_type == "image":
+                        image_url = getattr(output, "url", None)
+                        if image_url:
+                            print(f"  Found image URL: {image_url}")
+                    elif output_type in {"text", "logs"} and not text_response:
+                        text_attr = getattr(output, "text", None)
+                        if text_attr:
+                            text_response = text_attr if isinstance(text_attr, str) else str(text_attr)
+                            print(f"  Extracted text from tool output: {text_response[:100]}..." if len(text_response) > 100 else f"  Extracted text: {text_response}")
+        
+        return text_response, image_url
+
+    max_attempts = 2
+    max_wait_seconds = 120
+    poll_interval_seconds = 1
+    terminal_statuses = {"completed", "cancelled", "failed", "incomplete"}
+    max_output_tokens = MAX_OUTPUT_TOKENS
+
+    def get_incomplete_reason(details):
+        if not details:
+            return None
+        if isinstance(details, str):
+            return details
+        return getattr(details, "reason", None)
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            # Create the response using the Responses API
+            # Model options (non-pro, cost-effective):
+            #   - "gpt-5-mini": Best balance of capability and cost for well-defined tasks
+            #   - "gpt-5-nano": Fastest and cheapest, good for simple queries
+            #   - "gpt-4.1-mini": Reliable fallback, non-reasoning model
+            response = client.responses.create(
+                model="gpt-5-mini",  # Recommended for MMA analysis tasks
+                instructions=SYSTEM_INSTRUCTIONS,
+                input=[
+                    {
+                        "role": "user",
+                        "content": tweet_text
+                    }
+                ],
+                tools=tools if tools else [],
+                max_output_tokens=max_output_tokens,
+                store=True
+                # Note: temperature not supported by gpt-5-mini (reasoning model)
+            )
+            
+            print(f"Response ID: {response.id}")
+            print(f"Response status: {response.status}")
+            
+            # Poll until response reaches a terminal state
+            start_time = time.time()
+            timed_out = False
+            while response.status not in terminal_statuses:
+                if time.time() - start_time >= max_wait_seconds:
+                    timed_out = True
+                    print("Timed out waiting for response completion.")
+                    break
+                time.sleep(poll_interval_seconds)
+                response = client.responses.retrieve(response.id)
+                print(f"Response status: {response.status}")
+            
+            if response.status != "completed":
+                print(f"Final response status: {response.status}")
+                if response.status == "incomplete":
+                    incomplete_details = getattr(response, "incomplete_details", None)
+                    incomplete_reason = get_incomplete_reason(incomplete_details)
+                    if incomplete_details:
+                        print(f"Response incomplete details: {incomplete_details}")
+                    if incomplete_reason == "max_output_tokens" and attempt < max_attempts:
+                        max_output_tokens = min(max_output_tokens * 2, 6000)
+                        print(f"Increasing max_output_tokens to {max_output_tokens} for retry.")
+            
+            text_response, image_url = extract_response_output(response)
+            if text_response or image_url:
+                return text_response, image_url
+            
+            if timed_out and response.status in {"queued", "in_progress"}:
+                try:
+                    client.responses.cancel(response.id)
+                    print("Cancelled timed out response.")
+                except Exception as cancel_error:
+                    print(f"Error cancelling timed out response: {cancel_error}")
+            
+            if attempt < max_attempts:
+                print("No valid AI response. Retrying...")
+        except Exception as e:
+            print(f"Error in process_tweet_with_responses_api: {e}")
+            import traceback
+            traceback.print_exc()
+            if attempt < max_attempts:
+                print("Retrying after error...")
+                continue
+            return None, None
+
+    return None, None
 
 
 def download_image(image_url, save_path):
