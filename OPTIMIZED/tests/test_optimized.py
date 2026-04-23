@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import create_app
 from context_builder import MmaContextBuilder
 from openai_service import trim_reply_text
-from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs
+from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs, run_checkpoint_worker
 from settings import Config
 from storage import StateStore, read_jsonl
 from x_api import build_crc_response_token, verify_webhook_signature
@@ -394,6 +394,31 @@ class OptimizedTests(unittest.TestCase):
         retried = retry_failed_jobs(second_runtime)
         replies = list(read_jsonl(second_runtime.state.replies_path))
         self.assertEqual(len(retried), 1)
+        self.assertEqual(len(replies), 1)
+
+    def test_checkpoint_worker_processes_new_records_once(self):
+        state = StateStore(self.state_dir)
+        state.append_inbox_payload(self.make_payload(tweet_id="555"))
+
+        runtime = FightAgentRuntime(
+            build_runtime_bundle(
+                self.config,
+                responder=FakeResponder(text="Islam by decision."),
+                x_client=FakeXClient(),
+                context_builder=MmaContextBuilder(
+                    fighter_info_path=self.data_dir / "fighter_info.csv",
+                    event_data_path=self.data_dir / "event_data_sherdog.csv",
+                ),
+            ),
+            start_worker=False,
+        )
+
+        first_processed = run_checkpoint_worker(runtime)
+        second_processed = run_checkpoint_worker(runtime)
+        replies = list(read_jsonl(runtime.state.replies_path))
+
+        self.assertEqual(first_processed, 1)
+        self.assertEqual(second_processed, 0)
         self.assertEqual(len(replies), 1)
 
 

@@ -19,6 +19,7 @@ class StateStore:
         self.processed_ids_path = self.state_dir / "processed_event_ids.jsonl"
         self.replies_path = self.state_dir / "replies.jsonl"
         self.failed_jobs_path = self.state_dir / "failed_jobs.jsonl"
+        self.worker_checkpoint_path = self.state_dir / "worker_checkpoint.json"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         for path in [
             self.events_inbox_path,
@@ -27,6 +28,8 @@ class StateStore:
             self.failed_jobs_path,
         ]:
             path.touch(exist_ok=True)
+        if not self.worker_checkpoint_path.exists():
+            self.worker_checkpoint_path.write_text('{"offset": 0}\n', encoding="utf-8")
         self.processed_ids = self._load_processed_ids()
 
     def _load_processed_ids(self) -> set[str]:
@@ -90,6 +93,39 @@ class StateStore:
                 encoding="utf-8",
             )
             return current
+
+    def load_worker_checkpoint(self) -> int:
+        try:
+            payload = json.loads(self.worker_checkpoint_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, FileNotFoundError):
+            return 0
+        return int(payload.get("offset", 0))
+
+    def save_worker_checkpoint(self, offset: int) -> None:
+        with self.lock:
+            self.worker_checkpoint_path.write_text(
+                json.dumps({"offset": int(offset)}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+    def read_inbox_records_from_offset(self, offset: int) -> tuple[list[dict[str, Any]], int]:
+        file_size = self.events_inbox_path.stat().st_size
+        if offset > file_size:
+            offset = 0
+
+        records: list[dict[str, Any]] = []
+        with self.events_inbox_path.open("r", encoding="utf-8") as handle:
+            handle.seek(offset)
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    records.append(json.loads(stripped))
+                except json.JSONDecodeError:
+                    continue
+            new_offset = handle.tell()
+        return records, new_offset
 
     def iter_inbox_records(self) -> Iterable[dict[str, Any]]:
         return read_jsonl(self.events_inbox_path)
