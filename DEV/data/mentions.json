@@ -1,0 +1,72 @@
+{
+    "data": [
+        {
+            "text": "@TheFightAgent Tell me Michael Chandler's most recent 3 fights and outcomes.",
+            "created_at": "2025-01-15T22:15:58.000Z",
+            "edit_history_tweet_ids": [
+                "1879653783745237368"
+            ],
+            "id": "1879653783745237368",
+            "author_id": "1710919819447431168"
+        },
+        {
+            "text": "@TheFightAgent Tell me about Dan Hookers last 5 fights",
+            "created_at": "2025-01-15T20:12:24.000Z",
+            "edit_history_tweet_ids": [
+                "1879622683643797634"
+            ],
+            "id": "1879622683643797634",
+            "author_id": "1710919819447431168"
+        },
+        {
+            "text": "@TheFightAgent Research/analyze/predict the outcome of Merab Dvalishvili versus Umar Nurmagomedov this upcoming weekend - Include specifics including method and time of victory, and why you think that outcome is likely.",
+            "created_at": "2025-01-15T09:52:26.000Z",
+            "edit_history_tweet_ids": [
+                "1879466663952961814"
+            ],
+            "id": "1879466663952961814",
+            "author_id": "1222289587474661381"
+        },
+        {
+            "text": "Research, analyze, and then predict the outcome of an upcoming fight between Jiri Prochazka vs Jamahal Hill - go in depth and include specifics including method and time of victory, and why you think that outcome is likely. @TheFightAgent",
+            "created_at": "2025-01-15T09:27:17.000Z",
+            "edit_history_tweet_ids": [
+                "1879460337424142531"
+            ],
+            "id": "1879460337424142531",
+            "author_id": "1222289587474661381"
+        },
+        {
+            "text": "Summarize the upcoming fights this weekend @TheFightAgent is it a good card?",
+            "created_at": "2025-01-15T03:40:29.000Z",
+            "edit_history_tweet_ids": [
+                "1879373062052995568"
+            ],
+            "id": "1879373062052995568",
+            "author_id": "1710919819447431168"
+        },
+        {
+            "text": "@TheFightAgent hellloooooo",
+            "created_at": "2025-01-15T03:10:49.000Z",
+            "edit_history_tweet_ids": [
+                "1879365594245656797"
+            ],
+            "id": "1879365594245656797",
+            "author_id": "1710919819447431168"
+        },
+        {
+            "text": "@TheFightAgent fuck yes",
+            "created_at": "2025-01-14T17:21:04.000Z",
+            "edit_history_tweet_ids": [
+                "1879217179545178231"
+            ],
+            "id": "1879217179545178231",
+            "author_id": "1222289587474661381"
+        }
+    ],
+    "meta": {
+        "result_count": 7,
+        "newest_id": "1879653783745237368",
+        "oldest_id": "1879217179545178231"
+    }
+}
