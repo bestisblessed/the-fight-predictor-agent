@@ -1,0 +1,85 @@
+%%{init: {'themeVariables': {'fontSize': '20px'}}}%%
+flowchart LR
+  classDef api fill:#EAF2FF,stroke:#1E4D99,stroke-width:1.5px,color:#0E244D;
+  classDef process fill:#EEF7EE,stroke:#2F6B2F,stroke-width:1.5px,color:#143014;
+  classDef decision fill:#FFF4D6,stroke:#8A6D1F,stroke-width:1.8px,color:#4D3A0B;
+  classDef store fill:#F5F5F5,stroke:#555,stroke-width:1.3px,color:#222;
+  classDef external fill:#FDECEF,stroke:#9C3A47,stroke-width:1.5px,color:#4A141C;
+  classDef note fill:#FFF,stroke:#777,stroke-dasharray: 4 4,color:#333;
+
+  subgraph SETUP["1) One-Time Setup"]
+    direction TB
+    S1["Create X app + AAA access<br/>(Pay Per Use or Enterprise)"]:::api
+    S2["POST /2/webhooks<br/>Auth: Bearer app token"]:::api
+    S3{"CRC challenge valid?"}:::decision
+    S4["POST /2/account_activity/webhooks/{id}/subscriptions/all<br/>Auth shown as OAuth2 user token in endpoint ref<br/>(Quickstart text also shows OAuth1 3-legged sample)"]:::api
+    S5{"Subscription active?"}:::decision
+    S6["Ready for live delivery"]:::process
+    S1 --> S2 --> S3
+    S3 -- "No" --> S2
+    S3 -- "Yes" --> S4 --> S5
+    S5 -- "No" --> S4
+    S5 -- "Yes" --> S6
+  end
+
+  subgraph INGRESS["2) Webhook Ingress (Always-On Service)"]
+    direction TB
+    I0["X user posts @mention"]:::external
+    I1["AAA sends webhook payload JSON"]:::api
+    I2["Webhook endpoint receives request<br/>public HTTPS, no custom port in registered URL"]:::process
+    I3{"GET with crc_token?"}:::decision
+    I4["Return CRC response_token"]:::process
+    I5{"Verify x-twitter-webhooks-signature"}:::decision
+    I6["Write state/events_inbox.jsonl<br/>Return 200 OK in &lt;10s"]:::store
+    I7["Reject 401 + log<br/>logs/signature_failures.jsonl"]:::store
+    I0 --> I1 --> I2 --> I3
+    I3 -- "Yes" --> I4
+    I3 -- "No (event POST)" --> I5
+    I5 -- "Pass" --> I6
+    I5 -- "Fail" --> I7
+  end
+
+  subgraph WORKER["3) Async Worker (No Cron)"]
+    direction TB
+    W1["Consume events from state/events_inbox.jsonl"]:::process
+    W2{"tweet_create_events has valid @mention?"}:::decision
+    W3["Skip + logs/skipped_events.jsonl"]:::store
+    W4{"Already processed?<br/>state/processed_event_ids.jsonl"}:::decision
+    W5["Skip duplicate"]:::store
+    W6["Build context from local files<br/>instructions.md + fighter data"]:::process
+    W7["POST /v1/responses (OpenAI)<br/>model + input + optional tools"]:::api
+    W8{"Output passes guards?<br/>non-empty, length, safety"}:::decision
+    W9["Write state/failed_jobs.jsonl"]:::store
+    W10["POST /2/tweets reply<br/>reply.in_reply_to_tweet_id = mention_tweet_id"]:::api
+    W11{"Reply succeeded?"}:::decision
+    W12["Write success artifacts:<br/>state/replies.jsonl<br/>state/processed_event_ids.jsonl<br/>responses/*.json"]:::store
+    W13["Write retry artifact:<br/>state/failed_jobs.jsonl"]:::store
+
+    W1 --> W2
+    W2 -- "No" --> W3
+    W2 -- "Yes" --> W4
+    W4 -- "Yes" --> W5
+    W4 -- "No" --> W6 --> W7 --> W8
+    W8 -- "No" --> W9
+    W8 -- "Yes" --> W10 --> W11
+    W11 -- "Yes" --> W12
+    W11 -- "No" --> W13
+  end
+
+  subgraph RECOVERY["4) Recovery / Replay"]
+    direction TB
+    R1["Missed-delivery window detected"]:::process
+    R2["POST /2/webhooks/replay<br/>with from_date, to_date, webhook_id<br/>(up to prior 24h)"]:::api
+    R3["Replayed events return through same webhook path"]:::api
+    R4["Idempotency file check prevents duplicate replies"]:::store
+    R1 --> R2 --> R3 --> R4
+  end
+
+  N1["No cron polling.<br/>No database in v2.<br/>State uses JSON/JSONL files only."]:::note
+  N2["Ingress must stay running 24/7<br/>to receive webhook POSTs."]:::note
+
+  S6 --> I0
+  I6 --> W1
+  R3 --> I2
+  N1 -.-> WORKER
+  N2 -.-> INGRESS

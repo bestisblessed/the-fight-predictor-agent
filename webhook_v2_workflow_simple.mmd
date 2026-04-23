@@ -1,0 +1,20 @@
+%%{init: {'themeVariables': {'fontSize': '22px'}}}%%
+flowchart LR
+  classDef step fill:#EAF2FF,stroke:#1E4D99,stroke-width:1.6px,color:#0E244D;
+  classDef store fill:#F5F5F5,stroke:#555,stroke-width:1.3px,color:#222;
+  classDef note fill:#FFF,stroke:#777,stroke-dasharray: 4 4,color:#333;
+
+  A["1) User mentions @TheFightAgent on X"]:::step
+  B["2) X Account Activity webhook sends event to your remote server"]:::step
+  C["3) Webhook app validates request + extracts mention"]:::step
+  D["4) Agent builds context from local files (prompts + MMA data)"]:::step
+  E["5) OpenAI Responses API generates the prediction/analysis reply"]:::step
+  F["6) App posts reply via X POST /2/tweets (in-reply-to mention)"]:::step
+  G["7) App writes files for state/logs/results (JSON/JSONL)"]:::store
+
+  A --> B --> C --> D --> E --> F --> G
+
+  N1["Webhook-only v2: no cron polling loop"]:::note
+  N2["File-based v2: no database required"]:::note
+  N1 -.-> B
+  N2 -.-> G

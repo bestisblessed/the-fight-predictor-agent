@@ -1,0 +1,79 @@
+flowchart TB
+  classDef api fill:#EAF2FF,stroke:#1E4D99,stroke-width:1.5px,color:#0E244D;
+  classDef process fill:#EEF7EE,stroke:#2F6B2F,stroke-width:1.5px,color:#143014;
+  classDef decision fill:#FFF4D6,stroke:#8A6D1F,stroke-width:1.8px,color:#4D3A0B;
+  classDef store fill:#F5F5F5,stroke:#555,stroke-width:1.3px,color:#222;
+  classDef external fill:#FDECEF,stroke:#9C3A47,stroke-width:1.5px,color:#4A141C;
+  classDef note fill:#FFF,stroke:#777,stroke-dasharray: 4 4,color:#333;
+
+  subgraph SETUP["One-Time Provisioning (Webhook-Only V2)"]
+    S1["X Developer Console<br/>Create App + request AAA access<br/>(Pay Per Use or Enterprise)"]:::api
+    S2["POST /2/webhooks<br/>Auth: Bearer app token<br/>Body: public HTTPS callback URL"]:::api
+    S3{"CRC challenge passes?"}:::decision
+    S4["POST /2/account_activity/webhooks/{webhook_id}/subscriptions/all<br/>Auth: OAuth2 user token (endpoint reference)<br/>Quickstart example also shows OAuth1 3-legged"]:::api
+    S5{"Subscription active?"}:::decision
+    S6["Webhook delivery ready"]:::process
+
+    S1 --> S2 --> S3
+    S3 -- "No" --> S2
+    S3 -- "Yes" --> S4 --> S5
+    S5 -- "No" --> S4
+    S5 -- "Yes" --> S6
+  end
+
+  subgraph RUNTIME["Runtime Event Path (No Cron, No Polling)"]
+    R1["X user posts @mention"]:::external
+    R2["AAA emits webhook POST<br/>event payload JSON"]:::api
+    R3["Webhook endpoint receives request<br/>/x/webhook"]:::process
+    R4{"GET with crc_token?"}:::decision
+    R5["Return CRC response_token<br/>sha256=base64(HMAC-SHA256(crc_token, consumer_secret))"]:::process
+    R6{"Verify x-twitter-webhooks-signature"}:::decision
+    R7["Persist raw payload to state/events_inbox.jsonl<br/>Return 200 OK in <10s"]:::store
+    R8["Reject request (401) + log<br/>logs/signature_failures.jsonl"]:::store
+
+    W1["Async worker consumes new events<br/>from events_inbox.jsonl"]:::process
+    W2{"Contains valid @mention in tweet_create_events?"}:::decision
+    W3["Skip + log reason<br/>logs/skipped_events.jsonl"]:::store
+    W4{"Already processed?<br/>check state/processed_event_ids.jsonl"}:::decision
+    W5["Skip duplicate"]:::store
+    W6["Build model input from local files<br/>instructions.md + fighter data files"]:::process
+    W7["POST /v1/responses (OpenAI)<br/>model + input + optional tools"]:::api
+    W8{"Output passes guards?<br/>non-empty, length, safety"}:::decision
+    W9["Write failure record<br/>state/failed_jobs.jsonl"]:::store
+    W10["POST /2/tweets reply<br/>reply.in_reply_to_tweet_id = mention_tweet_id"]:::api
+    W11{"Reply POST succeeded?"}:::decision
+    W12["Append success artifacts:<br/>state/replies.jsonl<br/>state/processed_event_ids.jsonl<br/>responses/*.json"]:::store
+    W13["Append retry job + error details<br/>state/failed_jobs.jsonl"]:::store
+
+    R1 --> R2 --> R3 --> R4
+    R4 -- "Yes (CRC)" --> R5
+    R4 -- "No (event POST)" --> R6
+    R6 -- "Fail" --> R8
+    R6 -- "Pass" --> R7 --> W1
+    W1 --> W2
+    W2 -- "No" --> W3
+    W2 -- "Yes" --> W4
+    W4 -- "Yes" --> W5
+    W4 -- "No" --> W6 --> W7 --> W8
+    W8 -- "No" --> W9
+    W8 -- "Yes" --> W10 --> W11
+    W11 -- "Yes" --> W12
+    W11 -- "No" --> W13
+  end
+
+  subgraph RECOVERY["Recovery / Backfill Path (Still Webhook-Driven)"]
+    C1["Delivery outage / downtime detected"]:::process
+    C2["POST /2/webhooks/replay<br/>with from_date, to_date, webhook_id<br/>(up to previous 24h)"]:::api
+    C3["Replay events are pushed back to webhook endpoint"]:::api
+    C4["Idempotency file checks prevent double replies"]:::store
+
+    C1 --> C2 --> C3 --> W1
+    C3 --> C4
+  end
+
+  N1["Runtime requirement:<br/>Webhook service must be always running and publicly reachable (HTTPS)."]:::note
+  N2["Storage approach:<br/>JSON/JSONL files only for state, logs, idempotency, retries.<br/>No cron and no database in v2."]:::note
+
+  S6 --> R1
+  N1 -.-> R3
+  N2 -.-> W12
