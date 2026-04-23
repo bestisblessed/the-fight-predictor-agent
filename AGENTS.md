@@ -2,52 +2,62 @@
 
 ## Project Overview
 
-This is a Python-based Twitter bot for MMA fight prediction and automation. The project has three environments:
-- **DEV/**: Development scripts and testing
-- **PRODUCTION/**: Production-ready Twitter bot scripts
-- **PRODUCTION-WITH-IFTTT/**: Production with IFTTT integration
-- **PRODUCTION-WITH-IFTTT-DOCS/**: Production with Google Docs integration
+A Python-based AI agent that monitors Twitter/X mentions, sends them to OpenAI's Responses API with Code Interpreter and MMA datasets attached, and replies with predictions/analysis.
 
-## Build/Lint/Test Commands
+Three environments:
+- **DEV/**: Development and testing scripts
+- **PRODUCTION/**: Active production bot (what runs on the server)
+- **PRODUCTION-WITH-IFTTT/**: Older variant with IFTTT integration
+- **PRODUCTION-WITH-IFTTT-DOCS/**: Older variant with Google Docs integration
 
-### No Formal Test Suite
-This project does not have a formal test framework configured. Testing is done by:
-1. Running scripts manually in DEV/ environment first
-2. Checking output for errors
-3. Verifying Twitter API interactions in the DEV environment
+## Deployment (Server / Cron Job)
 
-### Running Individual Scripts
+The bot runs on a remote server as a cron job every 10 minutes:
+
+```
+*/10 * * * * /home/trinity/the-fight-predictor-agent/PRODUCTION/run_agent_cron.sh >> /home/trinity/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1; status=$?; /home/trinity/healthcheckio_push.sh /home/trinity/the-fight-predictor-agent/PRODUCTION/cron.log https://hc-ping.com/c22bfc9e-42ad-4669-991b-90f8fe14f7fa "$status" "HEALTHCHECK_OK: fight-predictor-agent"
+```
+
+`run_agent_cron.sh` does the following each run:
+1. Logs start time to `cron.log`
+2. Runs `download_mentions_from_drive_service_account.py` — downloads new mentions from Google Drive
+3. Runs `assistant_from_tweets.py` — processes mentions and posts replies via Twitter
+4. Logs completion and a healthcheck sentinel string to `cron.log`
+
+Python is invoked via pyenv: `$HOME/.pyenv/shims/python`
+
+Healthcheck pings [healthchecks.io](https://healthchecks.io) after each run to confirm the job completed.
+
+## Running Scripts Locally
+
 ```bash
-# Development environment
+# Development
 python DEV/post_tweet.py
 python DEV/check_mentions.py
 python DEV/reply_single_tweet.py <tweet_id> <reply_text>
 
-# Production environment
+# Production (run from PRODUCTION/ directory)
+python PRODUCTION/download_mentions_from_drive_service_account.py
 python PRODUCTION/assistant_from_tweets.py
 python PRODUCTION/post_tweet_with_rate_check.py
 
 # Tale of the Tape generators
-python tott_generator.py          # Generate Word document
-python tott_generator_pdf.py      # Generate PDF
-python tott_generator_png.py      # Generate PNG image
+python tott_generator.py          # Word document
+python tott_generator_pdf.py      # PDF
+python tott_generator_png.py      # PNG image
 ```
 
-### Manual Testing Approach
-- Test API credentials first with simple scripts
-- Use DEV/ environment for all new features
-- Check mentions.json and response files for verification
+### Testing Approach
+- No formal test framework — test manually in DEV/ first
+- Check `data/` and `responses/` output files for verification
 - Monitor rate limits when interacting with Twitter API
 
 ## Code Style Guidelines
 
 ### Imports
-- **Standard library imports first** (e.g., `import os`, `import time`, `import json`)
-- **Third-party imports second** (e.g., `import tweepy`, `import openai`, `import pandas`, `import requests`)
-- **Local imports last** (none in this codebase currently)
-- Use `from dotenv import load_dotenv` for environment variable management
+- Standard library first, third-party second, local last
+- Use `from dotenv import load_dotenv` for environment variables
 
-Example:
 ```python
 import os
 import time
@@ -56,151 +66,125 @@ import sys
 from datetime import datetime, timezone
 
 import requests
-import tweepy
 import openai
 from dotenv import load_dotenv
 from PIL import Image
 ```
 
 ### Environment Variables
-- Always use `load_dotenv()` at the start of scripts
-- Load credentials from environment variables, never hardcode
-- Check for required credentials before proceeding
-- Use `.env` files for local development
+- Always call `load_dotenv()` at the top
+- Never hardcode credentials
+- Fail fast if required credentials are missing
 
-Pattern:
 ```python
 load_dotenv()
-API_KEY = os.getenv("TWITTER_API_KEY")
-if not all([API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET]):
-    print("Error: Missing one or more Twitter API credentials.")
+API_KEY = os.getenv("OPENAI_API_KEY")
+if not API_KEY:
+    print("Error: Missing API key.")
     exit()
 ```
 
 ### Naming Conventions
-- **Files**: Use `snake_case.py` (e.g., `check_mentions.py`, `reply_single_tweet.py`)
-- **Variables**: Use `snake_case` (e.g., `tweet_id`, `response_data`)
-- **Constants**: Use `UPPER_CASE` for module-level constants (e.g., `API_KEY`, `SCOPES`)
-- **Functions**: Use `snake_case` (e.g., `post_tweet_v2()`, `get_user_id()`)
+- **Files**: `snake_case.py`
+- **Variables/Functions**: `snake_case`
+- **Constants**: `UPPER_CASE`
 
 ### Function Structure
 - Use `def main():` as entry point
-- Wrap execution in `if __name__ == "__main__": main()`
-- Accept command-line arguments with `sys.argv` when needed
-
-Example:
-```python
-def post_tweet_v2(text):
-    try:
-        response = client.create_tweet(text=text)
-        print(f"Tweet posted! ID: {response.data['id']}")
-    except tweepy.errors.Forbidden as e:
-        print("Error: Forbidden - Check your app's access level or API tier.")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-
-def main():
-    tweet_text = input("Enter your tweet: ")
-    post_tweet_v2(tweet_text)
-
-if __name__ == "__main__":
-    main()
-```
+- Wrap with `if __name__ == "__main__": main()`
 
 ### Error Handling
-- Use try/except blocks for API calls
-- Handle specific exceptions first (e.g., `tweepy.errors.Forbidden`)
-- Catch general `Exception` as fallback
-- Print descriptive error messages
+- Use try/except for all API calls
+- Handle specific exceptions before general `Exception`
+- Print descriptive error messages with context
 - Use `exit()` or `sys.exit()` for fatal errors
 
 ### File and Directory Management
-- Create directories with `os.makedirs('data', exist_ok=True)`
-- Use relative paths from script location
-- Store credentials in `credentials/` directory
-- Store data files in `data/` directory
-- Store generated reports in `reports/` directory
+- `os.makedirs('data', exist_ok=True)` for directory creation
+- Store credentials in `credentials/` (not in git)
+- Store data files in `data/`
+- Store generated responses in `responses/`
 
-### API Integration Patterns
+### API Integration
 
-**Twitter API (Tweepy)**:
+**OpenAI Responses API** (primary):
 ```python
-client = tweepy.Client(
-    consumer_key=API_KEY,
-    consumer_secret=API_SECRET,
-    access_token=ACCESS_TOKEN,
-    access_token_secret=ACCESS_SECRET
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+response = client.responses.create(
+    model="gpt-5-mini",
+    instructions=SYSTEM_INSTRUCTIONS,
+    input=[{"role": "user", "content": tweet_text}],
+    tools=tools if tools else [],
+    max_output_tokens=MAX_OUTPUT_TOKENS,
+    store=True
 )
 ```
 
-**OpenAI API**:
-```python
-client = openai.OpenAI(api_key=openai.api_key)
-thread = client.beta.threads.create()
-```
+**Twitter (HTTP + OAuth via subprocess or requests)**:
+- Uses direct API calls, not tweepy
+- OAuth credentials loaded from environment variables
 
-**HTTP Requests with OAuth**:
+**Google Drive (service account)**:
 ```python
-from requests_oauthlib import OAuth1
-oauth = OAuth1(api_key, api_secret, access_token, access_secret)
-response = requests.post(url, auth=oauth, headers=headers, data=payload)
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 ```
-
-### Data Persistence
-- Use JSON for structured data: `json.dump(data, f, indent=4)`
-- Track processed IDs in text files (e.g., `data/processed_tweet_ids.txt`)
-- Save responses with tweet IDs as filenames
-- Use `.docx` files for mentions data from Google Drive
 
 ### Output and Logging
-- Use `print()` statements for logging (no formal logging framework)
-- Print status updates at key steps
-- Include IDs and timestamps in output messages
-- Format rate limit information for readability
-
-### Commenting
-- Use comments for code sections (e.g., `# CHECKING EVERY 15 MINUTES`)
-- Comment out old code at the bottom of files instead of deleting
-- Use inline comments sparingly, focus on readable code
+- Use `print()` for logging (no formal logging framework)
+- Print status at key steps with IDs and timestamps
+- Append to `cron.log` on the server
 
 ### Security
 - Never commit API keys or credentials
-- Store secrets in `.env` files (already in `.gitignore`)
-- Use `.json` credential files in `credentials/` directory
-- Never print sensitive tokens in output
+- Secrets in `.env` files (in `.gitignore`)
+- JSON credential files in `credentials/` directory
 
 ## Project Structure
 
 ```
 /Users/td/Code/the-fight-predictor-agent/
+├── AGENTS.md
 ├── assistant.py                      # Interactive OpenAI chatbot
-├── tott_generator*.py               # Tale of the Tape generators
-├── instructions.md                  # Assistant prompts
-├── notes.md                         # Project documentation
-├── DEV/                             # Development scripts
-│   ├── data/                        # Test data files
+├── assistant_template.py
+├── tott_generator.py                 # Tale of the Tape (Word)
+├── tott_generator_pdf.py             # Tale of the Tape (PDF)
+├── tott_generator_png.py             # Tale of the Tape (PNG)
+├── test_responses_api.py
+├── instructions.md                   # Assistant system prompts
+├── notes.md
+├── requirements.txt
+├── credentials/                      # API credentials (not in git)
+├── data/
+├── responses/
+├── DEV/                              # Development scripts
 │   ├── check_mentions.py
 │   ├── post_tweet.py
-│   └── ...
-├── PRODUCTION/                      # Production scripts
+│   ├── reply_single_tweet.py
+│   ├── reply_tweets.py
 │   ├── assistant_from_tweets.py
-│   ├── post_tweet_with_rate_check.py
 │   └── ...
-├── PRODUCTION-WITH-IFTTT/           # IFTTT integration
-├── PRODUCTION-WITH-IFTTT-DOCS/      # Google Docs integration
-├── credentials/                     # API credentials (not in git)
-├── data/                           # Data storage
-└── reports/                        # Generated reports
+└── PRODUCTION/                       # Active production bot
+    ├── assistant_from_tweets.py      # Main agent loop
+    ├── download_mentions_from_drive_service_account.py
+    ├── download_mentions_from_drive.py
+    ├── post_tweet_with_rate_check.py
+    ├── reply_single_tweet.py
+    ├── run_agent_cron.sh             # Cron entrypoint
+    ├── run_agent.sh
+    ├── credentials/
+    ├── data/
+    └── responses/
 ```
 
 ## Key Dependencies
 
-- `tweepy` - Twitter API client
-- `openai` - OpenAI API client
-- `requests` - HTTP library
-- `requests_oauthlib` - OAuth authentication
-- `python-dotenv` - Environment variable management
-- `pandas` - Data manipulation
-- `python-docx` - Word document generation
-- `google-auth`, `google-auth-oauthlib`, `google-api-python-client` - Google APIs
-- `Pillow` - Image processing
+See `requirements.txt` for pinned versions.
+
+- `openai>=2.0.0` — Responses API (requires 2.x for Responses API support)
+- `python-dotenv` — Environment variable management
+- `requests` — HTTP library
+- `python-docx` — Word document generation
+- `Pillow` — Image processing
+- `pandas` — Data manipulation (tott generators)
+- `google-auth`, `google-auth-oauthlib`, `google-api-python-client` — Google Drive access
