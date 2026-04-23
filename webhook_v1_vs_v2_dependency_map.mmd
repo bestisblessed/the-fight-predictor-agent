@@ -1,0 +1,38 @@
+%%{init: {'themeVariables': {'fontSize': '20px'}}}%%
+flowchart TB
+  classDef ext fill:#EAF2FF,stroke:#1E4D99,stroke-width:1.5px,color:#0E244D;
+  classDef proc fill:#EEF7EE,stroke:#2F6B2F,stroke-width:1.5px,color:#143014;
+  classDef note fill:#FFF4D6,stroke:#8A6D1F,stroke-width:1.2px,color:#4D3A0B;
+
+  subgraph V1["V1 (Current/Legacy Polling Stack)"]
+    direction LR
+    X1["X mentions"]:::ext
+    I1["IFTTT / bridge"]:::ext
+    G1["Google Drive / Docs / Sheets"]:::ext
+    C1["Cron job"]:::proc
+    A1["Python agent scripts"]:::proc
+    O1["OpenAI Responses API"]:::ext
+    T1["X reply endpoint"]:::ext
+    H1["Healthchecks.io"]:::ext
+
+    X1 --> I1 --> G1 --> C1 --> A1 --> O1 --> A1 --> T1
+    C1 --> H1
+  end
+
+  subgraph V2["V2 (Webhook-Only Simplified Stack)"]
+    direction LR
+    X2["X mentions"]:::ext
+    W2["X Account Activity Webhook"]:::ext
+    S2["Always-on webhook service"]:::proc
+    F2["JSON/JSONL file state"]:::proc
+    A2["Agent processor"]:::proc
+    O2["OpenAI Responses API"]:::ext
+    T2["X reply endpoint"]:::ext
+
+    X2 --> W2 --> S2 --> F2 --> A2 --> O2 --> A2 --> T2
+  end
+
+  N1["Removed in V2: IFTTT, Google Docs/Drive/Sheets, cron mention polling"]:::note
+  N2["Kept in V2: X API + OpenAI API + Python runtime"]:::note
+  N1 -.-> V2
+  N2 -.-> V2
