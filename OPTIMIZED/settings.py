@@ -92,7 +92,6 @@ class Config:
             [
                 "X_API_KEY",
                 "X_API_SECRET",
-                "X_BEARER_TOKEN",
                 "BOT_USERNAME",
                 "PUBLIC_BASE_URL",
             ]
@@ -135,4 +134,3 @@ class Config:
     @staticmethod
     def _field_name(env_name: str) -> str:
         return env_name.lower()
-

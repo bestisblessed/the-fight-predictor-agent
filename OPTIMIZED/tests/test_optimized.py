@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -14,7 +15,7 @@ from openai_service import trim_reply_text
 from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs, run_checkpoint_worker
 from settings import Config
 from storage import StateStore, read_jsonl
-from x_api import build_crc_response_token, verify_webhook_signature
+from x_api import XApiClient, build_crc_response_token, verify_webhook_signature
 
 
 class FakeResponder:
@@ -51,6 +52,17 @@ class FakeXClient:
         if self.error:
             raise self.error
         return {"data": {"id": f"reply-{tweet_id}"}}
+
+
+class FakeHttpResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+        self.ok = 200 <= status_code < 300
+        self.text = json.dumps(payload)
+
+    def json(self):
+        return self._payload
 
 
 def make_signature(payload_bytes, secret="secret"):
@@ -254,6 +266,62 @@ class OptimizedTests(unittest.TestCase):
         text = "word " * 200
         trimmed = trim_reply_text(text, 50)
         self.assertLessEqual(len(trimmed), 50)
+
+    def test_require_x_admin_no_longer_requires_bearer_token(self):
+        config = Config(
+            root_dir=self.root,
+            data_dir=self.data_dir,
+            state_dir=self.state_dir,
+            openai_api_key="test-openai-key",
+            x_api_key="test-api-key",
+            x_api_secret="secret",
+            x_bearer_token=None,
+            x_access_token="access",
+            x_access_token_secret="access-secret",
+            x_oauth2_user_token=None,
+            bot_username="TheFightAgent",
+            public_base_url="https://fight-agent.example.com",
+            openai_model="gpt-5-mini",
+            openai_max_output_tokens=220,
+            openai_timeout_seconds=45,
+            log_level="INFO",
+            reply_char_limit=260,
+            x_timeout_seconds=30,
+        )
+        config.require_x_admin()
+
+    def test_bearer_request_refreshes_from_oauth2_token(self):
+        client = XApiClient(self.config)
+        captured_headers = []
+
+        def fake_request(method, url, headers, auth, json, timeout):
+            captured_headers.append(headers["Authorization"])
+            if len(captured_headers) == 1:
+                return FakeHttpResponse(
+                    401,
+                    {
+                        "title": "Unauthorized",
+                        "status": 401,
+                        "detail": "Unauthorized",
+                    },
+                )
+            return FakeHttpResponse(200, {"data": {"id": "42", "username": "TheFightAgent"}})
+
+        with patch("x_api.requests.request", side_effect=fake_request), patch(
+            "x_api.requests.post",
+            return_value=FakeHttpResponse(
+                200,
+                {
+                    "token_type": "bearer",
+                    "access_token": "fresh-bearer-token",
+                },
+            ),
+        ) as mocked_post:
+            response = client.get_user_by_username("TheFightAgent")
+
+        self.assertEqual(response["data"]["id"], "42")
+        self.assertEqual(captured_headers, ["Bearer bearer", "Bearer fresh-bearer-token"])
+        mocked_post.assert_called_once()
 
     def test_webhook_post_writes_inbox_and_returns_200(self):
         app = self.make_app()
