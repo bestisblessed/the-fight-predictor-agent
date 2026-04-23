@@ -1,0 +1,16 @@
+[Unit]
+Description=Fight Agent Optimized Webhook Service
+After=network.target
+
+[Service]
+Type=simple
+User=trinity
+Group=trinity
+WorkingDirectory=/home/trinity/the-fight-predictor-agent/OPTIMIZED
+EnvironmentFile=/home/trinity/the-fight-predictor-agent/OPTIMIZED/.env
+ExecStart=/home/trinity/the-fight-predictor-agent/OPTIMIZED/.venv/bin/gunicorn --workers 1 --bind 127.0.0.1:8080 app:create_app()
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
