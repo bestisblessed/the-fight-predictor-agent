@@ -1,3 +1,4 @@
+import os
 import json
 
 from flask import Flask, jsonify, request
@@ -11,9 +12,12 @@ def create_app(
     responder=None,
     x_client=None,
     context_builder=None,
+    start_worker: bool | None = None,
 ) -> Flask:
     runtime_config = config or Config.from_env()
     runtime_config.require_runtime()
+    if start_worker is None:
+        start_worker = os.getenv("OPTIMIZED_DISABLE_INPROCESS_WORKER") != "1"
     runtime = FightAgentRuntime(
         build_runtime_bundle(
             config=runtime_config,
@@ -21,7 +25,7 @@ def create_app(
             x_client=x_client,
             context_builder=context_builder,
         ),
-        start_worker=True,
+        start_worker=start_worker,
     )
 
     app = Flask(__name__)
