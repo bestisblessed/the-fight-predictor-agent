@@ -35,8 +35,8 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-        load_dotenv(ROOT_DIR / ".env")
-        load_dotenv()
+        load_dotenv(ROOT_DIR / ".env", override=True)
+        load_dotenv(override=True)
         return cls(
             root_dir=ROOT_DIR,
             data_dir=ROOT_DIR / "data",

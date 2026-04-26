@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -289,6 +290,36 @@ class OptimizedTests(unittest.TestCase):
             x_timeout_seconds=30,
         )
         config.require_x_admin()
+
+    def test_from_env_overrides_existing_process_values(self):
+        env_path = Path(__file__).resolve().parents[1] / ".env"
+        previous = env_path.read_text() if env_path.exists() else None
+        original_process_value = os.environ.get("X_API_SECRET")
+        try:
+            os.environ["X_API_SECRET"] = "REPLACE_ME"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "OPENAI_API_KEY=test-openai",
+                        "X_API_KEY=test-api-key",
+                        "X_API_SECRET=fresh-secret",
+                        "X_ACCESS_TOKEN=test-access",
+                        "X_ACCESS_TOKEN_SECRET=test-access-secret",
+                        "BOT_USERNAME=TheFightAgent",
+                        "PUBLIC_BASE_URL=https://fight-agent.example.com",
+                    ]
+                )
+            )
+            self.assertEqual(Config.from_env().x_api_secret, "fresh-secret")
+        finally:
+            if previous is None:
+                env_path.unlink(missing_ok=True)
+            else:
+                env_path.write_text(previous)
+            if original_process_value is None:
+                os.environ.pop("X_API_SECRET", None)
+            else:
+                os.environ["X_API_SECRET"] = original_process_value
 
     def test_bearer_request_refreshes_from_oauth2_token(self):
         client = XApiClient(self.config)
