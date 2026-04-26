@@ -35,8 +35,8 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-        load_dotenv(ROOT_DIR / ".env")
-        load_dotenv()
+        load_dotenv(ROOT_DIR / ".env", override=True)
+        load_dotenv(override=True)
         return cls(
             root_dir=ROOT_DIR,
             data_dir=ROOT_DIR / "data",
@@ -92,7 +92,6 @@ class Config:
             [
                 "X_API_KEY",
                 "X_API_SECRET",
-                "X_BEARER_TOKEN",
                 "BOT_USERNAME",
                 "PUBLIC_BASE_URL",
             ]
@@ -135,4 +134,3 @@ class Config:
     @staticmethod
     def _field_name(env_name: str) -> str:
         return env_name.lower()
-

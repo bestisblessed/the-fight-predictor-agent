@@ -1,5 +1,6 @@
 import queue
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -359,3 +360,23 @@ def retry_failed_jobs(runtime: FightAgentRuntime, limit: int | None = None) -> l
         if limit is not None and len(retried) >= limit:
             break
     return retried
+
+
+def run_checkpoint_worker(runtime: FightAgentRuntime) -> int:
+    start_offset = runtime.state.load_worker_checkpoint()
+    records, new_offset = runtime.state.read_inbox_records_from_offset(start_offset)
+    processed_count = 0
+    for record in records:
+        if not runtime.bundle.processor.extract_unprocessed_event_keys(record):
+            continue
+        runtime.bundle.processor.process_inbox_record(record, source="always-on-task")
+        processed_count += 1
+    runtime.state.save_worker_checkpoint(new_offset)
+    return processed_count
+
+
+def run_worker_forever(runtime: FightAgentRuntime, sleep_seconds: float = 2.0) -> None:
+    while True:
+        processed_count = run_checkpoint_worker(runtime)
+        if processed_count == 0:
+            time.sleep(sleep_seconds)
