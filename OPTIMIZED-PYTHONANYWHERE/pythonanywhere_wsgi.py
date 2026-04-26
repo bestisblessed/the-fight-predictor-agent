@@ -2,7 +2,7 @@ import os
 import sys
 
 
-PROJECT_DIR = "/home/bestisblessed/the-fight-predictor-agent/OPTIMIZED"
+PROJECT_DIR = "/home/bestisblessed/the-fight-predictor-agent/OPTIMIZED-PYTHONANYWHERE"
 
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)

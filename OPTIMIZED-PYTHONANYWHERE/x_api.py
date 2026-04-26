@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import quote
 
 import requests
+from requests.auth import HTTPBasicAuth
 from requests_oauthlib import OAuth1
 
 from settings import Config
@@ -38,6 +39,7 @@ class XApiClient:
     def __init__(self, config: Config):
         self.config = config
         self.timeout = config.x_timeout_seconds
+        self._generated_bearer_token: str | None = None
 
     def crc_response_token(self, crc_token: str) -> str:
         if not self.config.x_api_secret:
@@ -125,11 +127,11 @@ class XApiClient:
         url = f"{X_API_BASE}{path}"
         headers = {"Content-Type": "application/json"}
         auth = None
+        bearer_token = None
 
         if auth_mode == "bearer":
-            if not self.config.x_bearer_token:
-                raise RuntimeError("X_BEARER_TOKEN is required for bearer-auth requests")
-            headers["Authorization"] = f"Bearer {self.config.x_bearer_token}"
+            bearer_token = self._get_bearer_token()
+            headers["Authorization"] = f"Bearer {bearer_token}"
         elif auth_mode == "oauth2user":
             if not self.config.x_oauth2_user_token:
                 raise RuntimeError("X_OAUTH2_USER_TOKEN is required for OAuth2 user requests")
@@ -152,7 +154,40 @@ class XApiClient:
             json=json_body,
             timeout=self.timeout,
         )
+        if auth_mode == "bearer" and response.status_code == 401:
+            refreshed_token = self._generate_app_bearer_token()
+            if refreshed_token != bearer_token:
+                headers["Authorization"] = f"Bearer {refreshed_token}"
+                response = requests.request(
+                    method,
+                    url,
+                    headers=headers,
+                    auth=auth,
+                    json=json_body,
+                    timeout=self.timeout,
+                )
         return self._parse_response(response)
+
+    def _get_bearer_token(self) -> str:
+        if self._generated_bearer_token:
+            return self._generated_bearer_token
+        if self.config.x_bearer_token:
+            return self.config.x_bearer_token
+        return self._generate_app_bearer_token()
+
+    def _generate_app_bearer_token(self) -> str:
+        response = requests.post(
+            f"{X_API_BASE}/oauth2/token",
+            auth=HTTPBasicAuth(self.config.x_api_key, self.config.x_api_secret),
+            data={"grant_type": "client_credentials"},
+            timeout=self.timeout,
+        )
+        payload = self._parse_response(response)
+        token = str(payload.get("access_token") or "").strip()
+        if not token:
+            raise RuntimeError("X API oauth2/token response did not include access_token")
+        self._generated_bearer_token = token
+        return token
 
     @staticmethod
     def _parse_response(response: requests.Response) -> dict[str, Any]:

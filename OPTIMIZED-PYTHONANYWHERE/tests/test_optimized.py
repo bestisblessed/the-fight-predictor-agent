@@ -1,8 +1,10 @@
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -11,10 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app import create_app
 from context_builder import MmaContextBuilder
 from openai_service import trim_reply_text
-from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs
+from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs, run_checkpoint_worker
 from settings import Config
 from storage import StateStore, read_jsonl
-from x_api import build_crc_response_token, verify_webhook_signature
+from x_api import XApiClient, build_crc_response_token, verify_webhook_signature
 
 
 class FakeResponder:
@@ -51,6 +53,17 @@ class FakeXClient:
         if self.error:
             raise self.error
         return {"data": {"id": f"reply-{tweet_id}"}}
+
+
+class FakeHttpResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+        self.ok = 200 <= status_code < 300
+        self.text = json.dumps(payload)
+
+    def json(self):
+        return self._payload
 
 
 def make_signature(payload_bytes, secret="secret"):
@@ -255,6 +268,92 @@ class OptimizedTests(unittest.TestCase):
         trimmed = trim_reply_text(text, 50)
         self.assertLessEqual(len(trimmed), 50)
 
+    def test_require_x_admin_no_longer_requires_bearer_token(self):
+        config = Config(
+            root_dir=self.root,
+            data_dir=self.data_dir,
+            state_dir=self.state_dir,
+            openai_api_key="test-openai-key",
+            x_api_key="test-api-key",
+            x_api_secret="secret",
+            x_bearer_token=None,
+            x_access_token="access",
+            x_access_token_secret="access-secret",
+            x_oauth2_user_token=None,
+            bot_username="TheFightAgent",
+            public_base_url="https://fight-agent.example.com",
+            openai_model="gpt-5-mini",
+            openai_max_output_tokens=220,
+            openai_timeout_seconds=45,
+            log_level="INFO",
+            reply_char_limit=260,
+            x_timeout_seconds=30,
+        )
+        config.require_x_admin()
+
+    def test_from_env_overrides_existing_process_values(self):
+        env_path = Path(__file__).resolve().parents[1] / ".env"
+        previous = env_path.read_text() if env_path.exists() else None
+        original_process_value = os.environ.get("X_API_SECRET")
+        try:
+            os.environ["X_API_SECRET"] = "REPLACE_ME"
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "OPENAI_API_KEY=test-openai",
+                        "X_API_KEY=test-api-key",
+                        "X_API_SECRET=fresh-secret",
+                        "X_ACCESS_TOKEN=test-access",
+                        "X_ACCESS_TOKEN_SECRET=test-access-secret",
+                        "BOT_USERNAME=TheFightAgent",
+                        "PUBLIC_BASE_URL=https://fight-agent.example.com",
+                    ]
+                )
+            )
+            self.assertEqual(Config.from_env().x_api_secret, "fresh-secret")
+        finally:
+            if previous is None:
+                env_path.unlink(missing_ok=True)
+            else:
+                env_path.write_text(previous)
+            if original_process_value is None:
+                os.environ.pop("X_API_SECRET", None)
+            else:
+                os.environ["X_API_SECRET"] = original_process_value
+
+    def test_bearer_request_refreshes_from_oauth2_token(self):
+        client = XApiClient(self.config)
+        captured_headers = []
+
+        def fake_request(method, url, headers, auth, json, timeout):
+            captured_headers.append(headers["Authorization"])
+            if len(captured_headers) == 1:
+                return FakeHttpResponse(
+                    401,
+                    {
+                        "title": "Unauthorized",
+                        "status": 401,
+                        "detail": "Unauthorized",
+                    },
+                )
+            return FakeHttpResponse(200, {"data": {"id": "42", "username": "TheFightAgent"}})
+
+        with patch("x_api.requests.request", side_effect=fake_request), patch(
+            "x_api.requests.post",
+            return_value=FakeHttpResponse(
+                200,
+                {
+                    "token_type": "bearer",
+                    "access_token": "fresh-bearer-token",
+                },
+            ),
+        ) as mocked_post:
+            response = client.get_user_by_username("TheFightAgent")
+
+        self.assertEqual(response["data"]["id"], "42")
+        self.assertEqual(captured_headers, ["Bearer bearer", "Bearer fresh-bearer-token"])
+        mocked_post.assert_called_once()
+
     def test_webhook_post_writes_inbox_and_returns_200(self):
         app = self.make_app()
         client = app.test_client()
@@ -394,6 +493,31 @@ class OptimizedTests(unittest.TestCase):
         retried = retry_failed_jobs(second_runtime)
         replies = list(read_jsonl(second_runtime.state.replies_path))
         self.assertEqual(len(retried), 1)
+        self.assertEqual(len(replies), 1)
+
+    def test_checkpoint_worker_processes_new_records_once(self):
+        state = StateStore(self.state_dir)
+        state.append_inbox_payload(self.make_payload(tweet_id="555"))
+
+        runtime = FightAgentRuntime(
+            build_runtime_bundle(
+                self.config,
+                responder=FakeResponder(text="Islam by decision."),
+                x_client=FakeXClient(),
+                context_builder=MmaContextBuilder(
+                    fighter_info_path=self.data_dir / "fighter_info.csv",
+                    event_data_path=self.data_dir / "event_data_sherdog.csv",
+                ),
+            ),
+            start_worker=False,
+        )
+
+        first_processed = run_checkpoint_worker(runtime)
+        second_processed = run_checkpoint_worker(runtime)
+        replies = list(read_jsonl(runtime.state.replies_path))
+
+        self.assertEqual(first_processed, 1)
+        self.assertEqual(second_processed, 0)
         self.assertEqual(len(replies), 1)
 
 

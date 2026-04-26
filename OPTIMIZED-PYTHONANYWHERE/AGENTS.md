@@ -1,4 +1,4 @@
-# OPTIMIZED Agent Handoff
+# OPTIMIZED-PYTHONANYWHERE Agent Handoff
 
 ## Scripts And Files
 
@@ -9,7 +9,7 @@
 - `pythonanywhere_wsgi.py`: PythonAnywhere WSGI entrypoint. This imports the Flask app as `application`.
 - `pythonanywhere_worker.py`: Always-on task entrypoint for PythonAnywhere. It scans `state/events_inbox.jsonl`, processes unhandled mentions, calls OpenAI, posts X replies, and records success/failure state.
 - `admin.py`: Operational CLI for X setup and recovery: resolve bot user, create/validate webhook, subscribe/check/list subscriptions, replay X events, and retry failed jobs.
-- `settings.py`: Central configuration loader and validation. Reads `OPTIMIZED/.env`, validates `PUBLIC_BASE_URL`, and defines paths for data/state.
+- `settings.py`: Central configuration loader and validation. Reads `OPTIMIZED-PYTHONANYWHERE/.env`, validates `PUBLIC_BASE_URL`, and defines paths for data/state.
 - `service.py`: Core runtime pipeline. Filters webhook events, dedupes tweet IDs, builds context, calls the responder, posts replies, and writes processed/failure records.
 - `context_builder.py`: Local MMA context builder. Loads `data/fighter_info.csv` and `data/event_data_sherdog.csv`, matches fighter names, and creates compact fight context for OpenAI.
 - `openai_service.py`: OpenAI Responses API wrapper. Builds the prompt, calls the configured model, extracts reply text, and enforces the X reply character limit.
@@ -29,7 +29,7 @@
 3. `GET /x/webhook?crc_token=...` returns the X CRC `response_token` signed with `X_API_SECRET`.
 4. `POST /x/webhook` verifies `x-twitter-webhooks-signature`, parses the JSON payload, appends it to `state/events_inbox.jsonl`, and returns `200` quickly.
 5. The PythonAnywhere Always-on task runs `pythonanywhere_worker.py` separately from the web request process.
-6. The worker loads `OPTIMIZED/.env`, validates runtime settings, loads the local CSV datasets, and repeatedly scans `state/events_inbox.jsonl`.
+6. The worker loads `OPTIMIZED-PYTHONANYWHERE/.env`, validates runtime settings, loads the local CSV datasets, and repeatedly scans `state/events_inbox.jsonl`.
 7. For each unprocessed `tweet_create_events` mention, `service.py` skips duplicates, skips self-authored bot replies, and confirms the tweet actually mentions `BOT_USERNAME`.
 8. `context_builder.py` matches up to two fighters from the tweet and builds compact local MMA context.
 9. `openai_service.py` calls the OpenAI Responses API using `OPENAI_MODEL`, `OPENAI_MAX_OUTPUT_TOKENS`, and `OPENAI_TIMEOUT_SECONDS`, then trims the final reply to `REPLY_CHAR_LIMIT`.
