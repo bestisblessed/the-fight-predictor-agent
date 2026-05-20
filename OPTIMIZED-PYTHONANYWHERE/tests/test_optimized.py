@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app
 from context_builder import MmaContextBuilder
-from openai_service import trim_reply_text
+from openai_service import format_web_fallback_reply, trim_reply_text
 from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs, run_checkpoint_worker
 from settings import Config
 from storage import StateStore, read_jsonl
@@ -24,9 +24,15 @@ class FakeResponder:
         self.text = text
         self.error = error
         self.calls = 0
+        self.last_tweet_text = None
+        self.last_context_text = None
+        self.last_context_payload = None
 
-    def generate_reply(self, tweet_text, context_text):
+    def generate_reply(self, tweet_text, context_text, context_payload=None):
         self.calls += 1
+        self.last_tweet_text = tweet_text
+        self.last_context_text = context_text
+        self.last_context_payload = context_payload
         if self.error:
             raise self.error
         return {
@@ -37,10 +43,11 @@ class FakeResponder:
 
 
 class FakeXClient:
-    def __init__(self, secret="secret", error=None):
+    def __init__(self, secret="secret", error=None, parent_texts=None):
         self.secret = secret
         self.error = error
         self.calls = 0
+        self.parent_texts = parent_texts or {}
 
     def crc_response_token(self, crc_token):
         return build_crc_response_token(crc_token, self.secret)
@@ -53,6 +60,9 @@ class FakeXClient:
         if self.error:
             raise self.error
         return {"data": {"id": f"reply-{tweet_id}"}}
+
+    def get_tweet_text(self, tweet_id):
+        return self.parent_texts.get(str(tweet_id), "")
 
 
 class FakeHttpResponse:
@@ -129,6 +139,102 @@ class OptimizedTests(unittest.TestCase):
                     "Stance": "Orthodox",
                     "Fighter_ID_UFCStats": "def",
                 },
+                {
+                    "Fighter": "Yadong Song",
+                    "Nickname": "",
+                    "Birth Date": "",
+                    "Nationality": "China",
+                    "Hometown": "",
+                    "Association": "Team Alpha Male",
+                    "Weight Class": "Bantamweight",
+                    "Height": "5'8",
+                    "Wins": 22,
+                    "Losses": 8,
+                    "Win_Decision": 8,
+                    "Win_KO": 9,
+                    "Win_Sub": 5,
+                    "Loss_Decision": 5,
+                    "Loss_KO": 2,
+                    "Loss_Sub": 1,
+                    "Fighter_ID": 300,
+                    "Win_Other": 0,
+                    "Loss_Other": 0,
+                    "Reach": '67"',
+                    "Stance": "Orthodox",
+                    "Fighter_ID_UFCStats": "ghi",
+                },
+                {
+                    "Fighter": "Deiveson Figueiredo",
+                    "Nickname": "",
+                    "Birth Date": "",
+                    "Nationality": "Brazil",
+                    "Hometown": "",
+                    "Association": "Team Figueiredo",
+                    "Weight Class": "Bantamweight",
+                    "Height": "5'5",
+                    "Wins": 25,
+                    "Losses": 6,
+                    "Win_Decision": 7,
+                    "Win_KO": 9,
+                    "Win_Sub": 9,
+                    "Loss_Decision": 3,
+                    "Loss_KO": 2,
+                    "Loss_Sub": 1,
+                    "Fighter_ID": 400,
+                    "Win_Other": 0,
+                    "Loss_Other": 0,
+                    "Reach": '68"',
+                    "Stance": "Orthodox",
+                    "Fighter_ID_UFCStats": "jkl",
+                },
+                {
+                    "Fighter": "Conor McGregor",
+                    "Nickname": "",
+                    "Birth Date": "",
+                    "Nationality": "Ireland",
+                    "Hometown": "",
+                    "Association": "SBG Ireland",
+                    "Weight Class": "Lightweight",
+                    "Height": "5'9",
+                    "Wins": 22,
+                    "Losses": 6,
+                    "Win_Decision": 2,
+                    "Win_KO": 19,
+                    "Win_Sub": 1,
+                    "Loss_Decision": 0,
+                    "Loss_KO": 2,
+                    "Loss_Sub": 4,
+                    "Fighter_ID": 500,
+                    "Win_Other": 0,
+                    "Loss_Other": 0,
+                    "Reach": '74"',
+                    "Stance": "Southpaw",
+                    "Fighter_ID_UFCStats": "mno",
+                },
+                {
+                    "Fighter": "Max Holloway",
+                    "Nickname": "",
+                    "Birth Date": "",
+                    "Nationality": "United States",
+                    "Hometown": "",
+                    "Association": "Gracie Technics",
+                    "Weight Class": "Lightweight",
+                    "Height": "5'11",
+                    "Wins": 27,
+                    "Losses": 9,
+                    "Win_Decision": 13,
+                    "Win_KO": 12,
+                    "Win_Sub": 2,
+                    "Loss_Decision": 7,
+                    "Loss_KO": 1,
+                    "Loss_Sub": 1,
+                    "Fighter_ID": 600,
+                    "Win_Other": 0,
+                    "Loss_Other": 0,
+                    "Reach": '69"',
+                    "Stance": "Orthodox",
+                    "Fighter_ID_UFCStats": "pqr",
+                },
             ]
         )
         fighter_df.to_csv(self.data_dir / "fighter_info.csv", index=False)
@@ -181,6 +287,70 @@ class OptimizedTests(unittest.TestCase):
                     "Winning Round": 1,
                     "Winning Time": "1:45",
                     "Referee": "Ref B",
+                    "Fight Type": "Main Event",
+                },
+                {
+                    "Event Name": "UFC 4",
+                    "Event Location": "Vegas",
+                    "Event Date": "2025-02-22T00:00:00+00:00",
+                    "Fighter 1": "Yadong Song",
+                    "Fighter 2": "Henry Cejudo",
+                    "Fighter 1 ID": 300,
+                    "Fighter 2 ID": 997,
+                    "Weight Class": "Bantamweight",
+                    "Winning Fighter": "Yadong Song",
+                    "Winning Method": "Decision",
+                    "Winning Round": 3,
+                    "Winning Time": "5:00",
+                    "Referee": "Ref C",
+                    "Fight Type": "Main Event",
+                },
+                {
+                    "Event Name": "UFC 5",
+                    "Event Location": "Vegas",
+                    "Event Date": "2025-10-11T00:00:00+00:00",
+                    "Fighter 1": "Deiveson Figueiredo",
+                    "Fighter 2": "Montel Jackson",
+                    "Fighter 1 ID": 400,
+                    "Fighter 2 ID": 996,
+                    "Weight Class": "Bantamweight",
+                    "Winning Fighter": "Deiveson Figueiredo",
+                    "Winning Method": "Decision",
+                    "Winning Round": 3,
+                    "Winning Time": "5:00",
+                    "Referee": "Ref D",
+                    "Fight Type": "Main Event",
+                },
+                {
+                    "Event Name": "UFC 6",
+                    "Event Location": "Vegas",
+                    "Event Date": "2021-07-10T00:00:00+00:00",
+                    "Fighter 1": "Conor McGregor",
+                    "Fighter 2": "Dustin Poirier",
+                    "Fighter 1 ID": 500,
+                    "Fighter 2 ID": 995,
+                    "Weight Class": "Lightweight",
+                    "Winning Fighter": "Dustin Poirier",
+                    "Winning Method": "TKO",
+                    "Winning Round": 1,
+                    "Winning Time": "5:00",
+                    "Referee": "Ref E",
+                    "Fight Type": "Main Event",
+                },
+                {
+                    "Event Name": "UFC 7",
+                    "Event Location": "Vegas",
+                    "Event Date": "2024-10-26T00:00:00+00:00",
+                    "Fighter 1": "Max Holloway",
+                    "Fighter 2": "Ilia Topuria",
+                    "Fighter 1 ID": 600,
+                    "Fighter 2 ID": 994,
+                    "Weight Class": "Featherweight",
+                    "Winning Fighter": "Ilia Topuria",
+                    "Winning Method": "KO",
+                    "Winning Round": 3,
+                    "Winning Time": "1:34",
+                    "Referee": "Ref F",
                     "Fight Type": "Main Event",
                 },
             ]
@@ -263,10 +433,58 @@ class OptimizedTests(unittest.TestCase):
         self.assertEqual(len(exact["matched_fighters"]), 2)
         self.assertIn("Islam Makhachev", fuzzy["matched_fighters"])
 
+    def test_fighter_matching_handles_reversed_names_and_typos(self):
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+        reversed_and_misspelled = builder.build_context(
+            "@TheFightAgent Song Yadong vs Deiveson Figuieredo prediction?"
+        )
+        typo = builder.build_context("@TheFightAgent Conor McGregor vs Mac Holloway?")
+
+        self.assertEqual(
+            set(reversed_and_misspelled["matched_fighters"]),
+            {"Yadong Song", "Deiveson Figueiredo"},
+        )
+        self.assertEqual(set(typo["matched_fighters"]), {"Conor McGregor", "Max Holloway"})
+
+    def test_follow_up_text_uses_parent_tweet_context(self):
+        parent_text = (
+            "@TheFightAgent Research and analyze Song Yadong vs Deiveson Figuieredo in depth."
+        )
+        responder = FakeResponder(text="Yadong by decision.")
+        x_client = FakeXClient(parent_texts={"900": parent_text})
+        app = self.make_app(responder=responder, x_client=x_client)
+        payload = self.make_payload(
+            text="@TheFightAgent you have access to it somewhere in your datasets. Find it.",
+            tweet_id="901",
+        )
+        payload["tweet_create_events"][0]["in_reply_to_status_id_str"] = "900"
+
+        app.runtime.bundle.processor.process_inbox_record({"payload": payload}, source="manual")  # type: ignore[attr-defined]
+        replies = list(read_jsonl(app.runtime.state.replies_path))  # type: ignore[attr-defined]
+        app.runtime.stop()  # type: ignore[attr-defined]
+
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(set(replies[0]["matched_fighters"]), {"Yadong Song", "Deiveson Figueiredo"})
+        self.assertIn(parent_text, responder.last_tweet_text)
+
     def test_reply_truncation_stays_within_limit(self):
         text = "word " * 200
         trimmed = trim_reply_text(text, 50)
         self.assertLessEqual(len(trimmed), 50)
+
+    def test_web_fallback_reply_discloses_lower_confidence_and_sources(self):
+        reply = format_web_fallback_reply(
+            "I lean Fighter A by decision.",
+            ["https://example.com/a", "https://example.com/b"],
+            max_chars=3800,
+        )
+
+        self.assertIn("Local dataset was missing/ambiguous, so I used web sources; confidence lower.", reply)
+        self.assertIn("https://example.com/a", reply)
+        self.assertIn("https://example.com/b", reply)
 
     def test_require_x_admin_no_longer_requires_bearer_token(self):
         config = Config(

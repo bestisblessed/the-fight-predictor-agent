@@ -8,6 +8,7 @@ import pandas as pd
 
 
 WORD_RE = re.compile(r"[a-z0-9']+")
+MAX_ALIAS_TOKENS = 4
 
 
 def normalize_text(value: Any) -> str:
@@ -19,6 +20,10 @@ def normalize_text(value: Any) -> str:
     return collapsed.replace("'", "")
 
 
+def token_sort_text(value: str) -> str:
+    return " ".join(sorted(value.split()))
+
+
 @dataclass(slots=True)
 class FighterMatch:
     fighter_name: str
@@ -26,6 +31,8 @@ class FighterMatch:
     fighter_id: str
     score: float
     row: dict[str, Any]
+    match_type: str = "exact"
+    matched_text: str = ""
 
 
 class MmaContextBuilder:
@@ -42,16 +49,32 @@ class MmaContextBuilder:
 
         self.fighter_records = []
         self.fighters_by_name: dict[str, dict[str, Any]] = {}
-        self.names_by_token_count: dict[int, list[str]] = {1: [], 2: [], 3: []}
+        self.names_by_token_count: dict[int, list[str]] = {1: [], 2: [], 3: [], 4: []}
+        self.aliases_by_token_count: dict[int, list[tuple[str, str]]] = {
+            1: [],
+            2: [],
+            3: [],
+            4: [],
+        }
+        self.canonical_by_alias: dict[str, str] = {}
 
         for _, row in deduped.iterrows():
             record = row.to_dict()
             normalized_name = record["normalized_name"]
             self.fighters_by_name[normalized_name] = record
             self.fighter_records.append(record)
-            token_count = min(len(normalized_name.split()), 3)
             if normalized_name:
+                token_count = min(len(normalized_name.split()), MAX_ALIAS_TOKENS)
                 self.names_by_token_count[token_count].append(normalized_name)
+                for alias in self._aliases_for_name(normalized_name):
+                    self.canonical_by_alias.setdefault(alias, normalized_name)
+
+        for alias, canonical_name in self.canonical_by_alias.items():
+            token_count = min(len(alias.split()), MAX_ALIAS_TOKENS)
+            self.aliases_by_token_count[token_count].append((alias, canonical_name))
+
+        for aliases in self.aliases_by_token_count.values():
+            aliases.sort(key=lambda item: len(item[0]), reverse=True)
 
         self.fighter_records.sort(key=lambda item: len(item["normalized_name"]), reverse=True)
 
@@ -69,6 +92,9 @@ class MmaContextBuilder:
             return {
                 "matched_fighters": [],
                 "context_text": "No structured fighter match found in local MMA data.",
+                "resolution_source": "local",
+                "resolution_complete": False,
+                "match_details": [],
             }
 
         sections = []
@@ -83,6 +109,17 @@ class MmaContextBuilder:
         return {
             "matched_fighters": [match.fighter_name for match in matches],
             "context_text": "\n\n".join(section for section in sections if section),
+            "resolution_source": "local",
+            "resolution_complete": len(matches) >= 2,
+            "match_details": [
+                {
+                    "fighter_name": match.fighter_name,
+                    "matched_text": match.matched_text or match.normalized_name,
+                    "match_type": match.match_type,
+                    "score": round(match.score, 3),
+                }
+                for match in matches
+            ],
         }
 
     def match_fighters(self, tweet_text: str, limit: int = 2) -> list[FighterMatch]:
@@ -105,22 +142,31 @@ class MmaContextBuilder:
 
     def _exact_matches(self, normalized_tweet: str) -> list[FighterMatch]:
         padded = f" {normalized_tweet} "
-        matches = []
-        for record in self.fighter_records:
-            normalized_name = record["normalized_name"]
-            if not normalized_name:
+        indexed_matches: list[tuple[int, FighterMatch]] = []
+        for alias, canonical_name in self.canonical_by_alias.items():
+            if not alias:
                 continue
-            if f" {normalized_name} " not in padded:
+            pattern = f" {alias} "
+            index = padded.find(pattern)
+            if index < 0:
                 continue
-            matches.append(
-                FighterMatch(
-                    fighter_name=str(record["Fighter"]),
-                    normalized_name=normalized_name,
-                    fighter_id=str(record.get("Fighter_ID", "")).strip(),
-                    score=1.0,
-                    row=record,
+            record = self.fighters_by_name[canonical_name]
+            indexed_matches.append(
+                (
+                    index,
+                    FighterMatch(
+                        fighter_name=str(record["Fighter"]),
+                        normalized_name=canonical_name,
+                        fighter_id=str(record.get("Fighter_ID", "")).strip(),
+                        score=1.0 if alias == canonical_name else 0.97,
+                        row=record,
+                        match_type="exact" if alias == canonical_name else "alias",
+                        matched_text=alias,
+                    ),
                 )
             )
+        indexed_matches.sort(key=lambda item: (item[0], -len(item[1].matched_text)))
+        matches = [match for _, match in indexed_matches]
         return self._unique_matches(matches)
 
     def _fuzzy_matches(self, normalized_tweet: str) -> list[FighterMatch]:
@@ -129,27 +175,46 @@ class MmaContextBuilder:
             return []
 
         candidates: list[FighterMatch] = []
-        for width in (3, 2):
+        for width in (4, 3, 2):
             if len(tokens) < width:
                 continue
             for index in range(len(tokens) - width + 1):
                 ngram = " ".join(tokens[index : index + width])
-                for candidate_name in self.names_by_token_count.get(width, []):
-                    score = SequenceMatcher(None, ngram, candidate_name).ratio()
+                sorted_ngram = token_sort_text(ngram)
+                for candidate_alias, canonical_name in self.aliases_by_token_count.get(width, []):
+                    sequence_score = SequenceMatcher(None, ngram, candidate_alias).ratio()
+                    token_sort_score = SequenceMatcher(
+                        None,
+                        sorted_ngram,
+                        token_sort_text(candidate_alias),
+                    ).ratio()
+                    score = max(sequence_score, token_sort_score)
                     if score < 0.88:
                         continue
-                    record = self.fighters_by_name[candidate_name]
+                    record = self.fighters_by_name[canonical_name]
                     candidates.append(
                         FighterMatch(
                             fighter_name=str(record["Fighter"]),
-                            normalized_name=candidate_name,
+                            normalized_name=canonical_name,
                             fighter_id=str(record.get("Fighter_ID", "")).strip(),
                             score=score,
                             row=record,
+                            match_type="token_sort_fuzzy"
+                            if token_sort_score > sequence_score
+                            else "fuzzy",
+                            matched_text=ngram,
                         )
                     )
         candidates.sort(key=lambda item: (item.score, len(item.normalized_name)), reverse=True)
         return self._unique_matches(candidates)
+
+    @staticmethod
+    def _aliases_for_name(normalized_name: str) -> set[str]:
+        aliases = {normalized_name}
+        parts = normalized_name.split()
+        if len(parts) == 2:
+            aliases.add(" ".join(reversed(parts)))
+        return aliases
 
     @staticmethod
     def _unique_matches(matches: list[FighterMatch]) -> list[FighterMatch]:

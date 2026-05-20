@@ -1,0 +1,7 @@
+.env
+**/__pycache__/
+*.py[cod]
+
+OPTIMIZED-PYTHONANYWHERE/state/*.json
+OPTIMIZED-PYTHONANYWHERE/state/*.jsonl
+!OPTIMIZED-PYTHONANYWHERE/state/.gitkeep
