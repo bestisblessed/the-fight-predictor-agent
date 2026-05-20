@@ -403,9 +403,7 @@ def build_runtime_bundle(
         api_key=config.openai_api_key or "",
         model=config.openai_model,
         escalation_model=config.openai_escalation_model or config.openai_model,
-        max_output_tokens=config.openai_max_output_tokens,
         timeout_seconds=config.openai_timeout_seconds,
-        reply_char_limit=config.reply_char_limit,
         data_file_paths=[
             config.data_dir / "fighter_info.csv",
             config.data_dir / "event_data_sherdog.csv",

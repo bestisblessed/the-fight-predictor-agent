@@ -34,12 +34,6 @@ QUESTIONS = [
     ),
 ]
 
-
-def env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    return int(value) if value else default
-
-
 def build_responder(data_paths: list[Path]) -> OpenAIResponder | None:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -49,9 +43,7 @@ def build_responder(data_paths: list[Path]) -> OpenAIResponder | None:
         api_key=api_key,
         model=model,
         escalation_model=os.getenv("OPENAI_ESCALATION_MODEL") or model,
-        max_output_tokens=env_int("OPENAI_MAX_OUTPUT_TOKENS", 1800),
-        timeout_seconds=env_int("OPENAI_TIMEOUT_SECONDS", 45),
-        reply_char_limit=env_int("REPLY_CHAR_LIMIT", 3800),
+        timeout_seconds=int(os.getenv("OPENAI_TIMEOUT_SECONDS", "45")),
         data_file_paths=data_paths,
         file_cache_path=ROOT_DIR / "state" / "openai_file_ids.json",
     )

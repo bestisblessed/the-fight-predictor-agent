@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app
 from context_builder import MmaContextBuilder
-from openai_service import format_web_fallback_reply, trim_reply_text
+from openai_service import format_web_fallback_reply
 from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs, run_checkpoint_worker
 from settings import Config
 from storage import StateStore, read_jsonl
@@ -371,10 +371,8 @@ class OptimizedTests(unittest.TestCase):
             bot_username="TheFightAgent",
             public_base_url="https://fight-agent.example.com",
             openai_model="gpt-5-mini",
-            openai_max_output_tokens=220,
             openai_timeout_seconds=45,
             log_level="INFO",
-            reply_char_limit=260,
             x_timeout_seconds=30,
         )
         StateStore(self.state_dir).save_webhook_config({"bot_user_id": "42", "webhook_id": "1000"})
@@ -470,16 +468,16 @@ class OptimizedTests(unittest.TestCase):
         self.assertEqual(set(replies[0]["matched_fighters"]), {"Yadong Song", "Deiveson Figueiredo"})
         self.assertIn(parent_text, responder.last_tweet_text)
 
-    def test_reply_truncation_stays_within_limit(self):
+    def test_web_fallback_reply_preserves_long_text(self):
         text = "word " * 200
-        trimmed = trim_reply_text(text, 50)
-        self.assertLessEqual(len(trimmed), 50)
+        reply = format_web_fallback_reply(text, ["https://example.com/a"])
+        self.assertGreater(len(reply), 900)
+        self.assertIn("https://example.com/a", reply)
 
     def test_web_fallback_reply_discloses_lower_confidence_and_sources(self):
         reply = format_web_fallback_reply(
             "I lean Fighter A by decision.",
             ["https://example.com/a", "https://example.com/b"],
-            max_chars=3800,
         )
 
         self.assertIn("Local dataset was missing/ambiguous, so I used web sources; confidence lower.", reply)
@@ -501,10 +499,8 @@ class OptimizedTests(unittest.TestCase):
             bot_username="TheFightAgent",
             public_base_url="https://fight-agent.example.com",
             openai_model="gpt-5-mini",
-            openai_max_output_tokens=220,
             openai_timeout_seconds=45,
             log_level="INFO",
-            reply_char_limit=260,
             x_timeout_seconds=30,
         )
         config.require_x_admin()

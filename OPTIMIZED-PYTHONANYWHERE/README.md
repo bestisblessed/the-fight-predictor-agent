@@ -208,9 +208,7 @@ Recommended production OpenAI settings:
 
 ```bash
 OPENAI_MODEL=gpt-5.4-mini
-OPENAI_MAX_OUTPUT_TOKENS=1800
 OPENAI_TIMEOUT_SECONDS=90
-REPLY_CHAR_LIMIT=3800
 # Optional higher-cost escalation model:
 # OPENAI_ESCALATION_MODEL=gpt-5.5
 ```

@@ -23,7 +23,7 @@ For detailed matchup requests, include:
 - Finish profile
 - Key uncertainty
 
-Do not say the dataset is missing if any local context is provided. If a source note is provided, include it exactly once near the top. For detailed requests, do not compress the answer into a short tweet; write a full natural analysis with enough specifics to justify the pick. Use plain text; do not use markdown bold, markdown tables, or code fences.
+Do not say the dataset is missing if any local context is provided. If a source note is provided, include it exactly once near the top. For detailed requests, write a full natural analysis with enough specifics to justify the pick. Use plain text; do not use markdown bold, markdown tables, or code fences.
 """
 
 CODE_INTERPRETER_RESOLVER_PROMPT = """Use Python/pandas and the attached CSV files to resolve MMA fighter names from the request.
@@ -37,7 +37,7 @@ Rules:
   "matched_fighters": ["Canonical Fighter One", "Canonical Fighter Two"],
   "complete": true,
   "confidence": 0.0,
-  "context_text": "compact local data context with records, finish profile, and recent fights",
+  "context_text": "rich local data context with records, finish profile, and recent fights",
   "notes": "brief explanation of fuzzy lookup"
 }
 - Set complete to true only when two matchup fighters are resolved from local files.
@@ -51,9 +51,7 @@ class OpenAIResponder:
         self,
         api_key: str,
         model: str,
-        max_output_tokens: int,
         timeout_seconds: int,
-        reply_char_limit: int,
         escalation_model: str | None = None,
         data_file_paths: list[Path] | None = None,
         file_cache_path: Path | None = None,
@@ -61,8 +59,6 @@ class OpenAIResponder:
         self.client = openai.OpenAI(api_key=api_key, timeout=timeout_seconds)
         self.model = model
         self.escalation_model = escalation_model or model
-        self.max_output_tokens = max_output_tokens
-        self.reply_char_limit = reply_char_limit
         self.data_file_paths = data_file_paths or []
         self.file_cache_path = file_cache_path
 
@@ -103,7 +99,7 @@ class OpenAIResponder:
         )
         response_id = getattr(response, "id", None)
         raw_text = extract_text(response)
-        final_text = trim_reply_text(ensure_source_note(raw_text, source_note), self.reply_char_limit)
+        final_text = ensure_source_note(raw_text, source_note)
         if not final_text:
             raise ValueError("OpenAI returned an empty reply")
         return {
@@ -131,7 +127,6 @@ class OpenAIResponder:
             model=model,
             instructions=SYSTEM_PROMPT,
             input=[{"role": "user", "content": user_prompt}],
-            max_output_tokens=self.max_output_tokens,
             store=False,
         )
 
@@ -156,7 +151,6 @@ class OpenAIResponder:
                         }
                     ],
                     tool_choice="required",
-                    max_output_tokens=min(self.max_output_tokens, 1200),
                     store=False,
                 )
             except Exception:
@@ -187,7 +181,6 @@ class OpenAIResponder:
                 input=[{"role": "user", "content": prompt}],
                 tools=[{"type": "web_search"}],
                 tool_choice="required",
-                max_output_tokens=self.max_output_tokens,
                 store=False,
             )
         except Exception:
@@ -195,7 +188,7 @@ class OpenAIResponder:
 
         text = extract_text(response)
         citations = extract_url_citations(response)
-        final_text = format_web_fallback_reply(text, citations, self.reply_char_limit)
+        final_text = format_web_fallback_reply(text, citations)
         if not final_text:
             return None
         return {
@@ -304,26 +297,12 @@ def ensure_source_note(text: str, source_note: str) -> str:
     return f"{source_note} {normalized}".strip()
 
 
-def format_web_fallback_reply(text: str, citations: list[str], max_chars: int) -> str:
+def format_web_fallback_reply(text: str, citations: list[str]) -> str:
     with_note = ensure_source_note(text, WEB_FALLBACK_NOTE)
     unique_citations = unique_urls(citations)
     if unique_citations:
         with_note = f"{with_note} Sources: {' '.join(unique_citations[:3])}"
-    return trim_reply_text(with_note, max_chars)
-
-
-def trim_reply_text(text: str, max_chars: int) -> str:
-    normalized = normalize_reply_text(text)
-    if len(normalized) <= max_chars:
-        return normalized
-    if max_chars <= 3:
-        return normalized[:max_chars]
-    trimmed = normalized[: max_chars - 3].rstrip()
-    if " " in trimmed:
-        trimmed = trimmed.rsplit(" ", 1)[0].rstrip()
-    if not trimmed:
-        trimmed = normalized[: max_chars - 3]
-    return trimmed + "..."
+    return normalize_reply_text(with_note)
 
 
 def parse_json_object(text: str) -> dict[str, Any] | None:
