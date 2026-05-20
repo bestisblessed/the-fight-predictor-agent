@@ -23,7 +23,7 @@ For detailed matchup requests, include:
 - Finish profile
 - Key uncertainty
 
-Do not say the dataset is missing if any local context is provided. If a source note is provided, include it exactly once near the top. Keep the reply readable on X and under the configured character limit. Use plain text; do not use markdown bold, markdown tables, or code fences.
+Do not say the dataset is missing if any local context is provided. If a source note is provided, include it exactly once near the top. For detailed requests, do not compress the answer into a short tweet; write a full natural analysis with enough specifics to justify the pick. Use plain text; do not use markdown bold, markdown tables, or code fences.
 """
 
 CODE_INTERPRETER_RESOLVER_PROMPT = """Use Python/pandas and the attached CSV files to resolve MMA fighter names from the request.
