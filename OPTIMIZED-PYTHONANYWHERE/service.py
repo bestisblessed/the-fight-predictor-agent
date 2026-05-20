@@ -1,4 +1,5 @@
 import queue
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -9,6 +10,13 @@ from openai_service import OpenAIResponder
 from settings import Config
 from storage import StateStore, utc_now_iso
 from x_api import XApiClient
+
+
+FOLLOW_UP_RE = re.compile(
+    r"\b(originally|you have access|find it|proceed|what i asked|same fight|same matchup|"
+    r"that fight|this fight|that matchup|this matchup|in your datasets|somewhere in your data)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(slots=True)
@@ -76,12 +84,14 @@ class EventProcessor:
             self.state.mark_processed(event_key, tweet_id, "not_directed_at_bot")
             return
 
-        context_payload = self.context_builder.build_context(tweet_text)
+        analysis_text = self._analysis_text(payload, event, tweet_text)
+        context_payload = self.context_builder.build_context(analysis_text)
 
         try:
             openai_result = self.responder.generate_reply(
-                tweet_text=tweet_text,
+                tweet_text=analysis_text,
                 context_text=context_payload["context_text"],
+                context_payload=context_payload,
             )
         except ValueError as exc:
             self._record_failure(
@@ -134,7 +144,10 @@ class EventProcessor:
                 "tweet_id": tweet_id,
                 "reply_id": str(reply_id) if reply_id else "",
                 "reply_text": openai_result["text"],
-                "matched_fighters": context_payload["matched_fighters"],
+                "matched_fighters": openai_result.get("matched_fighters")
+                or context_payload["matched_fighters"],
+                "resolution_source": openai_result.get("resolution_source")
+                or context_payload.get("resolution_source", "local"),
                 "openai_response_id": openai_result.get("response_id"),
                 "model": openai_result.get("model"),
                 "source": source,
@@ -216,6 +229,74 @@ class EventProcessor:
 
         normalized_text = normalize_text(tweet_text)
         return f" {self.bot_handle.lower()} " in f" {normalized_text} "
+
+    def _analysis_text(self, payload: dict[str, Any], event: dict[str, Any], tweet_text: str) -> str:
+        current_context = self.context_builder.build_context(tweet_text)
+        needs_parent = len(current_context.get("matched_fighters", [])) < 2 or self._looks_like_follow_up(tweet_text)
+        if not needs_parent:
+            return tweet_text
+
+        parent_text = self._parent_tweet_text(payload, event)
+        if not parent_text:
+            return tweet_text
+        return f"Original thread tweet:\n{parent_text}\n\nFollow-up mention:\n{tweet_text}"
+
+    @staticmethod
+    def _looks_like_follow_up(tweet_text: str) -> bool:
+        return bool(FOLLOW_UP_RE.search(tweet_text or ""))
+
+    def _parent_tweet_text(self, payload: dict[str, Any], event: dict[str, Any]) -> str:
+        parent_id = self._parent_tweet_id(event)
+        if not parent_id:
+            return ""
+
+        embedded_text = self._embedded_tweet_text(payload, parent_id)
+        if embedded_text:
+            return embedded_text
+
+        get_tweet_text = getattr(self.x_client, "get_tweet_text", None)
+        if not callable(get_tweet_text):
+            return ""
+        try:
+            return str(get_tweet_text(parent_id) or "").strip()
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _parent_tweet_id(event: dict[str, Any]) -> str:
+        candidates = [
+            event.get("in_reply_to_status_id_str"),
+            event.get("in_reply_to_status_id"),
+            event.get("quoted_status_id_str"),
+            event.get("quoted_status_id"),
+        ]
+        for referenced in event.get("referenced_tweets", []) or []:
+            if not isinstance(referenced, dict):
+                continue
+            if referenced.get("type") in {"replied_to", "quoted"}:
+                candidates.append(referenced.get("id"))
+        for candidate in candidates:
+            if candidate is not None and str(candidate).strip():
+                return str(candidate).strip()
+        return ""
+
+    @classmethod
+    def _embedded_tweet_text(cls, payload: dict[str, Any], tweet_id: str) -> str:
+        for key in ("tweets", "included_tweets"):
+            tweets = payload.get(key) or {}
+            if isinstance(tweets, dict) and tweet_id in tweets:
+                text = cls._tweet_text(tweets[tweet_id])
+                if text:
+                    return text
+            if isinstance(tweets, list):
+                for tweet in tweets:
+                    if not isinstance(tweet, dict):
+                        continue
+                    if str(tweet.get("id_str") or tweet.get("id") or "").strip() == tweet_id:
+                        text = cls._tweet_text(tweet)
+                        if text:
+                            return text
+        return ""
 
 
 class BackgroundWorker:
@@ -321,9 +402,13 @@ def build_runtime_bundle(
     runtime_responder = responder or OpenAIResponder(
         api_key=config.openai_api_key or "",
         model=config.openai_model,
-        max_output_tokens=config.openai_max_output_tokens,
+        escalation_model=config.openai_escalation_model or config.openai_model,
         timeout_seconds=config.openai_timeout_seconds,
-        reply_char_limit=config.reply_char_limit,
+        data_file_paths=[
+            config.data_dir / "fighter_info.csv",
+            config.data_dir / "event_data_sherdog.csv",
+        ],
+        file_cache_path=config.state_dir / "openai_file_ids.json",
     )
     processor = EventProcessor(
         config=config,

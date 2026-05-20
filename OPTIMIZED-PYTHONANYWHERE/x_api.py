@@ -66,6 +66,14 @@ class XApiClient:
             json_body=payload,
         )
 
+    def get_tweet_text(self, tweet_id: str) -> str:
+        response = self._request(
+            "GET",
+            f"/2/tweets/{quote(str(tweet_id))}?tweet.fields=author_id,conversation_id,created_at,referenced_tweets",
+            auth_mode="bearer",
+        )
+        return str(response.get("data", {}).get("text") or "").strip()
+
     def get_user_by_username(self, username: str) -> dict[str, Any]:
         encoded = quote(username.lstrip("@"))
         return self._request("GET", f"/2/users/by/username/{encoded}", auth_mode="bearer")

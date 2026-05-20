@@ -26,12 +26,11 @@ class Config:
     bot_username: str | None
     public_base_url: str | None
     openai_model: str
-    openai_max_output_tokens: int
     openai_timeout_seconds: int
     log_level: str
-    reply_char_limit: int
     x_timeout_seconds: int
     webhook_path: str = DEFAULT_WEBHOOK_PATH
+    openai_escalation_model: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -50,12 +49,11 @@ class Config:
             x_oauth2_user_token=os.getenv("X_OAUTH2_USER_TOKEN"),
             bot_username=os.getenv("BOT_USERNAME"),
             public_base_url=os.getenv("PUBLIC_BASE_URL"),
-            openai_model=os.getenv("OPENAI_MODEL", "gpt-5-mini"),
-            openai_max_output_tokens=int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "220")),
-            openai_timeout_seconds=int(os.getenv("OPENAI_TIMEOUT_SECONDS", "45")),
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-5.4-mini"),
+            openai_timeout_seconds=int(os.getenv("OPENAI_TIMEOUT_SECONDS", "90")),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
-            reply_char_limit=int(os.getenv("REPLY_CHAR_LIMIT", "260")),
             x_timeout_seconds=int(os.getenv("X_TIMEOUT_SECONDS", "30")),
+            openai_escalation_model=os.getenv("OPENAI_ESCALATION_MODEL"),
         )
 
     @property

@@ -8,8 +8,8 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - Verifies CRC and `x-twitter-webhooks-signature`.
 - Writes accepted events to `state/events_inbox.jsonl`.
 - Processes mentions in a single in-process background worker.
-- Builds local context from `data/fighter_info.csv` and `data/event_data_sherdog.csv`.
-- Generates one text reply with the OpenAI Responses API.
+- Builds local context from `data/fighter_info.csv` and `data/event_data_sherdog.csv`, including typo and reversed-name matching.
+- Generates one text reply with the OpenAI Responses API, with Code Interpreter and web search fallbacks when local matching is incomplete.
 - Posts one direct reply through `POST /2/tweets`.
 
 ## What this version intentionally does not do
@@ -18,7 +18,9 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - No Google Drive, Google Docs, Google Sheets, or IFTTT.
 - No database.
 - No media replies, retweets, or threads.
-- No Code Interpreter or image generation.
+- No image generation.
+- Code Interpreter is used only as a fallback resolver for ambiguous/missing local matches.
+- Web search is used only after local matching and Code Interpreter cannot fully resolve the request.
 
 ## Files
 
@@ -46,6 +48,8 @@ Fill in the `.env` values before running anything.
 cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED-PYTHONANYWHERE
 source .venv/bin/activate
 python -m unittest discover -s tests -v
+python smoke_test_questions.py --local-only
+python smoke_test_questions.py  # uses OpenAI for no-post fallback checks when OPENAI_API_KEY is set
 python app.py
 ```
 
@@ -198,6 +202,15 @@ python admin.py resolve-bot-user
 python admin.py create-webhook
 python admin.py validate-webhook
 python admin.py subscribe
+```
+
+Recommended production OpenAI settings:
+
+```bash
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_TIMEOUT_SECONDS=90
+# Optional higher-cost escalation model:
+# OPENAI_ESCALATION_MODEL=gpt-5.5
 ```
 
 ### PythonAnywhere storage and CPU notes
