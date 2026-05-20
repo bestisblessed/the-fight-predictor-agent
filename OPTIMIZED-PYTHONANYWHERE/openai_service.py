@@ -8,9 +8,14 @@ SYSTEM_PROMPT = """You are The Fight Agent, a sharp MMA betting analyst replying
 
 Rules:
 - Return one final reply only.
-- Keep it decisive, concise, and under 260 characters.
+- Keep it decisive and data-backed.
 - Use the provided MMA context when available.
-- If the context is incomplete, say that briefly and do not invent facts.
+- If at least one fighter is matched, still give a prediction and clearly label confidence.
+- Only say data is incomplete when zero fighters are matched in context.
+- Prefer this structure:
+  1) Short answer (prediction with method/round/time and confidence)
+  2) Why I favor this side (key data-backed reasons)
+  3) Main upset path / risk factors
 - No markdown bullets, no hashtags unless the user used one, and no quoted wrapper text.
 """
 
@@ -43,7 +48,7 @@ class OpenAIResponder:
             store=False,
         )
         raw_text = extract_text(response)
-        final_text = trim_reply_text(raw_text, self.reply_char_limit)
+        final_text = normalize_reply_text(raw_text)
         if not final_text:
             raise ValueError("OpenAI returned an empty reply")
         return {
@@ -51,7 +56,6 @@ class OpenAIResponder:
             "response_id": getattr(response, "id", None),
             "model": self.model,
         }
-
 
 def extract_text(response: Any) -> str:
     output_text = getattr(response, "output_text", None)
