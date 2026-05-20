@@ -66,6 +66,19 @@ class XApiClient:
             json_body=payload,
         )
 
+    def create_reply_thread(self, root_tweet_id: str, texts: list[str]) -> list[dict[str, Any]]:
+        if not texts:
+            raise RuntimeError("create_reply_thread requires at least one text segment")
+        responses = []
+        parent_id = str(root_tweet_id)
+        for text in texts:
+            response = self.create_reply(parent_id, text)
+            responses.append(response)
+            next_parent = response.get("data", {}).get("id") if isinstance(response, dict) else None
+            if next_parent:
+                parent_id = str(next_parent)
+        return responses
+
     def get_user_by_username(self, username: str) -> dict[str, Any]:
         encoded = quote(username.lstrip("@"))
         return self._request("GET", f"/2/users/by/username/{encoded}", auth_mode="bearer")

@@ -121,11 +121,7 @@ class EventProcessor:
             )
             return
 
-        reply_id = (
-            reply_response.get("data", {}).get("id")
-            if isinstance(reply_response, dict)
-            else None
-        )
+        reply_id = reply_response.get("data", {}).get("id") if isinstance(reply_response, dict) else None
 
         self.state.record_reply(
             {

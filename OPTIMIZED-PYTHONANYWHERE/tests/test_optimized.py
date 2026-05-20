@@ -35,7 +35,6 @@ class FakeResponder:
             "model": "fake-model",
         }
 
-
 class FakeXClient:
     def __init__(self, secret="secret", error=None):
         self.secret = secret
@@ -53,7 +52,6 @@ class FakeXClient:
         if self.error:
             raise self.error
         return {"data": {"id": f"reply-{tweet_id}"}}
-
 
 class FakeHttpResponse:
     def __init__(self, status_code, payload):
@@ -260,8 +258,13 @@ class OptimizedTests(unittest.TestCase):
         )
         exact = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
         fuzzy = builder.build_context("@TheFightAgent Islma Makhachev vs Arman Tsarukyan?")
+        reversed_name_order = builder.build_context("@TheFightAgent Makhachev Islam vs Arman Tsarukyan")
+        both_typo_and_reversed = builder.build_context("@TheFightAgent Islma Makhachev vs Tsarukyn Arman")
         self.assertEqual(len(exact["matched_fighters"]), 2)
         self.assertIn("Islam Makhachev", fuzzy["matched_fighters"])
+        self.assertIn("Islam Makhachev", reversed_name_order["matched_fighters"])
+        self.assertIn("Islam Makhachev", both_typo_and_reversed["matched_fighters"])
+        self.assertIn("Arman Tsarukyan", both_typo_and_reversed["matched_fighters"])
 
     def test_reply_truncation_stays_within_limit(self):
         text = "word " * 200
