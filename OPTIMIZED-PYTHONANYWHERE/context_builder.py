@@ -43,6 +43,7 @@ class MmaContextBuilder:
         self.fighter_records = []
         self.fighters_by_name: dict[str, dict[str, Any]] = {}
         self.names_by_token_count: dict[int, list[str]] = {1: [], 2: [], 3: []}
+        self.reverse_name_aliases: dict[str, str] = {}
 
         for _, row in deduped.iterrows():
             record = row.to_dict()
@@ -52,6 +53,10 @@ class MmaContextBuilder:
             token_count = min(len(normalized_name.split()), 3)
             if normalized_name:
                 self.names_by_token_count[token_count].append(normalized_name)
+                parts = normalized_name.split()
+                if len(parts) == 2:
+                    reversed_name = f"{parts[1]} {parts[0]}"
+                    self.reverse_name_aliases[reversed_name] = normalized_name
 
         self.fighter_records.sort(key=lambda item: len(item["normalized_name"]), reverse=True)
 
@@ -87,12 +92,16 @@ class MmaContextBuilder:
 
     def match_fighters(self, tweet_text: str, limit: int = 2) -> list[FighterMatch]:
         normalized_tweet = normalize_text(tweet_text)
+        side_matches = self._match_from_versus_sides(normalized_tweet, limit=limit)
+        if len(side_matches) >= limit:
+            return side_matches[:limit]
+
         exact_matches = self._exact_matches(normalized_tweet)
         if len(exact_matches) >= limit:
             return exact_matches[:limit]
 
         fuzzy_matches = self._fuzzy_matches(normalized_tweet)
-        combined = exact_matches[:]
+        combined = self._unique_matches(side_matches[:] + exact_matches[:])
         seen = {match.normalized_name for match in combined}
         for match in fuzzy_matches:
             if match.normalized_name in seen:
@@ -102,6 +111,88 @@ class MmaContextBuilder:
             if len(combined) >= limit:
                 break
         return combined[:limit]
+
+    def _match_from_versus_sides(self, normalized_tweet: str, limit: int = 2) -> list[FighterMatch]:
+        parts = re.split(r"\b(?:vs|v)\b", normalized_tweet, maxsplit=1)
+        if len(parts) != 2:
+            return []
+
+        left = parts[0].strip()
+        right = parts[1].strip()
+        if not left or not right:
+            return []
+
+        left_match = self._best_side_match(left)
+        right_match = self._best_side_match(right)
+        matches = [match for match in (left_match, right_match) if match is not None]
+        if not matches:
+            return []
+        return self._unique_matches(matches)[:limit]
+
+    def _best_side_match(self, side_text: str) -> FighterMatch | None:
+        side_tokens = WORD_RE.findall(side_text)
+        if not side_tokens:
+            return None
+        side_joined = " ".join(side_tokens)
+        padded_side = f" {side_joined} "
+
+        best: FighterMatch | None = None
+        for record in self.fighter_records:
+            normalized_name = record["normalized_name"]
+            if not normalized_name:
+                continue
+
+            score = 0.0
+            if f" {normalized_name} " in padded_side:
+                score = 1.0
+            else:
+                parts = normalized_name.split()
+                if len(parts) == 2:
+                    reversed_name = f"{parts[1]} {parts[0]}"
+                    if f" {reversed_name} " in padded_side:
+                        score = 0.99
+                if score == 0.0:
+                    score = self._name_similarity(side_joined, normalized_name)
+
+            if score < 0.8:
+                continue
+
+            candidate = FighterMatch(
+                fighter_name=str(record["Fighter"]),
+                normalized_name=normalized_name,
+                fighter_id=str(record.get("Fighter_ID", "")).strip(),
+                score=score,
+                row=record,
+            )
+            if best is None or candidate.score > best.score:
+                best = candidate
+        return best
+
+    @staticmethod
+    def _name_similarity(left: str, right: str) -> float:
+        ordered_score = SequenceMatcher(None, left, right).ratio()
+        left_tokens = left.split()
+        right_tokens = right.split()
+        if not left_tokens or not right_tokens:
+            return ordered_score
+
+        if len(left_tokens) == len(right_tokens):
+            token_scores = []
+            remaining = right_tokens[:]
+            for left_token in left_tokens:
+                best_index = -1
+                best_score = 0.0
+                for idx, right_token in enumerate(remaining):
+                    candidate_score = SequenceMatcher(None, left_token, right_token).ratio()
+                    if candidate_score > best_score:
+                        best_score = candidate_score
+                        best_index = idx
+                if best_index >= 0:
+                    token_scores.append(best_score)
+                    remaining.pop(best_index)
+            if token_scores:
+                return max(ordered_score, sum(token_scores) / len(token_scores))
+        return ordered_score
 
     def _exact_matches(self, normalized_tweet: str) -> list[FighterMatch]:
         padded = f" {normalized_tweet} "
@@ -118,6 +209,22 @@ class MmaContextBuilder:
                     normalized_name=normalized_name,
                     fighter_id=str(record.get("Fighter_ID", "")).strip(),
                     score=1.0,
+                    row=record,
+                )
+            )
+
+        for reversed_name, canonical_name in self.reverse_name_aliases.items():
+            if f" {reversed_name} " not in padded:
+                continue
+            record = self.fighters_by_name.get(canonical_name)
+            if not record:
+                continue
+            matches.append(
+                FighterMatch(
+                    fighter_name=str(record["Fighter"]),
+                    normalized_name=canonical_name,
+                    fighter_id=str(record.get("Fighter_ID", "")).strip(),
+                    score=0.99,
                     row=record,
                 )
             )

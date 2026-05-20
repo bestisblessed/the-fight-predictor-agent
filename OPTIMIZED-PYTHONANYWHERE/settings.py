@@ -54,7 +54,7 @@ class Config:
             openai_max_output_tokens=int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "220")),
             openai_timeout_seconds=int(os.getenv("OPENAI_TIMEOUT_SECONDS", "45")),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
-            reply_char_limit=int(os.getenv("REPLY_CHAR_LIMIT", "260")),
+            reply_char_limit=int(os.getenv("REPLY_CHAR_LIMIT", "25000")),
             x_timeout_seconds=int(os.getenv("X_TIMEOUT_SECONDS", "30")),
         )
 
