@@ -59,7 +59,6 @@ WEAK_MMA_TERMS = {
     "bets",
     "betting",
     "underdog",
-    "favorite",
 }
 
 CORE_AI_META_TERMS = {

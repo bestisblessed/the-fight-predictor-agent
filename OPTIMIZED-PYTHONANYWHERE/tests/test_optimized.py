@@ -482,6 +482,7 @@ class OptimizedTests(unittest.TestCase):
             "@TheFightAgent Please follow me back let's collaborate.",
             "@TheFightAgent ALTCOIN KING OFFICIAL. Let's talk privately for collab.",
             "@TheFightAgent Any crypto picks for this altcoin pump?",
+            "@TheFightAgent What is your favorite pizza topping?",
         ]
 
         for index, text in enumerate(spam_examples, start=1):
