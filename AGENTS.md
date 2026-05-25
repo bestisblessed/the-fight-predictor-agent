@@ -1,32 +1,32 @@
 # AGENTS.md - Coding Guidelines for AI Agents
 
+## Current Deployed Runtime Notice
+
+Current deployed working folder is **OPTIMIZED-PYTHONANYWHERE/**. The active runtime is the PythonAnywhere web app plus the always-on worker. **PRODUCTION/** is a legacy cron deployment and should not be used for active bot changes unless explicitly requested.
+
 ## Project Overview
 
 A Python-based AI agent that monitors Twitter/X mentions, sends them to OpenAI's Responses API with Code Interpreter and MMA datasets attached, and replies with predictions/analysis.
 
-Three environments:
+Current deployment:
+- **OPTIMIZED-PYTHONANYWHERE/**: Active deployed bot for PythonAnywhere. Key runtime files include `pythonanywhere_wsgi.py` for the web app entrypoint, `pythonanywhere_worker.py` for the always-on worker, and `service.py` for shared bot behavior.
+
+Other environments:
 - **DEV/**: Development and testing scripts
-- **PRODUCTION/**: Active production bot (what runs on the server)
+- **PRODUCTION/**: Legacy cron deployment; inactive for current production behavior unless explicitly requested
 - **PRODUCTION-WITH-IFTTT/**: Older variant with IFTTT integration
 - **PRODUCTION-WITH-IFTTT-DOCS/**: Older variant with Google Docs integration
 
-## Deployment (Server / Cron Job)
+## Deployment (PythonAnywhere Web App + Always-On Worker)
 
-The bot runs on a remote server as a cron job every 10 minutes:
+The current deployed production bot runs from **OPTIMIZED-PYTHONANYWHERE/** on PythonAnywhere.
 
-```
-*/10 * * * * /home/trinity/the-fight-predictor-agent/PRODUCTION/run_agent_cron.sh >> /home/trinity/the-fight-predictor-agent/PRODUCTION/cron.log 2>&1; status=$?; /home/trinity/healthcheckio_push.sh /home/trinity/the-fight-predictor-agent/PRODUCTION/cron.log https://hc-ping.com/c22bfc9e-42ad-4669-991b-90f8fe14f7fa "$status" "HEALTHCHECK_OK: fight-predictor-agent"
-```
+Primary active runtime files:
+- `OPTIMIZED-PYTHONANYWHERE/pythonanywhere_wsgi.py`: PythonAnywhere WSGI entrypoint for the web app
+- `OPTIMIZED-PYTHONANYWHERE/pythonanywhere_worker.py`: Always-on worker process
+- `OPTIMIZED-PYTHONANYWHERE/service.py`: Shared service layer used by the active bot
 
-`run_agent_cron.sh` does the following each run:
-1. Logs start time to `cron.log`
-2. Runs `download_mentions_from_drive_service_account.py` — downloads new mentions from Google Drive
-3. Runs `assistant_from_tweets.py` — processes mentions and posts replies via Twitter
-4. Logs completion and a healthcheck sentinel string to `cron.log`
-
-Python is invoked via pyenv: `$HOME/.pyenv/shims/python`
-
-Healthcheck pings [healthchecks.io](https://healthchecks.io) after each run to confirm the job completed.
+Do not make active bot changes in **PRODUCTION/** unless the user explicitly asks for the legacy cron implementation. The old **PRODUCTION/** cron job path is retained for reference only and is not the current deployed working folder.
 
 ## Running Scripts Locally
 
@@ -36,7 +36,10 @@ python DEV/post_tweet.py
 python DEV/check_mentions.py
 python DEV/reply_single_tweet.py <tweet_id> <reply_text>
 
-# Production (run from PRODUCTION/ directory)
+# Active production behavior (run from OPTIMIZED-PYTHONANYWHERE/ directory)
+python OPTIMIZED-PYTHONANYWHERE/pythonanywhere_worker.py
+
+# Legacy cron scripts (PRODUCTION/; use only if explicitly requested)
 python PRODUCTION/download_mentions_from_drive_service_account.py
 python PRODUCTION/assistant_from_tweets.py
 python PRODUCTION/post_tweet_with_rate_check.py
@@ -164,7 +167,14 @@ from googleapiclient.discovery import build
 │   ├── reply_tweets.py
 │   ├── assistant_from_tweets.py
 │   └── ...
-└── PRODUCTION/                       # Active production bot
+├── OPTIMIZED-PYTHONANYWHERE/         # Current deployed PythonAnywhere bot
+│   ├── pythonanywhere_wsgi.py        # PythonAnywhere web app entrypoint
+│   ├── pythonanywhere_worker.py      # Always-on worker
+│   ├── service.py                    # Shared active bot behavior
+│   ├── app.py
+│   ├── settings.py
+│   └── ...
+└── PRODUCTION/                       # Legacy cron bot; inactive for current deployment
     ├── assistant_from_tweets.py      # Main agent loop
     ├── download_mentions_from_drive_service_account.py
     ├── download_mentions_from_drive.py
