@@ -47,6 +47,7 @@ class FakeXClient:
         self.secret = secret
         self.error = error
         self.calls = 0
+        self.replies = []
         self.parent_texts = parent_texts or {}
 
     def crc_response_token(self, crc_token):
@@ -57,6 +58,7 @@ class FakeXClient:
 
     def create_reply(self, tweet_id, text):
         self.calls += 1
+        self.replies.append({"tweet_id": str(tweet_id), "text": text})
         if self.error:
             raise self.error
         return {"data": {"id": f"reply-{tweet_id}"}}
@@ -467,6 +469,64 @@ class OptimizedTests(unittest.TestCase):
         self.assertEqual(len(replies), 1)
         self.assertEqual(set(replies[0]["matched_fighters"]), {"Yadong Song", "Deiveson Figueiredo"})
         self.assertIn(parent_text, responder.last_tweet_text)
+
+    def test_scope_filter_replies_to_generic_spam_without_openai(self):
+        scope_reply = (
+            "I only process MMA/UFC/fight prediction questions or questions about this AI "
+            "bot, its data, and how it works. Tag me with an in-scope question and I'll help."
+        )
+
+        spam_examples = [
+            "@TheFightAgent Let's pump it. Can we talk privately? DM me now.",
+            "@TheFightAgent Let's talk privately for collab.",
+            "@TheFightAgent Please follow me back let's collaborate.",
+            "@TheFightAgent ALTCOIN KING OFFICIAL. Let's talk privately for collab.",
+            "@TheFightAgent Any crypto picks for this altcoin pump?",
+        ]
+
+        for index, text in enumerate(spam_examples, start=1):
+            with self.subTest(text=text):
+                responder = FakeResponder()
+                x_client = FakeXClient()
+                app = self.make_app(responder=responder, x_client=x_client)
+                payload = self.make_payload(text=text, tweet_id=f"scope-{index}")
+
+                app.runtime.bundle.processor.process_inbox_record({"payload": payload}, source="manual")  # type: ignore[attr-defined]
+                replies = list(read_jsonl(app.runtime.state.replies_path))  # type: ignore[attr-defined]
+                processed = list(read_jsonl(app.runtime.state.processed_ids_path))  # type: ignore[attr-defined]
+                app.runtime.stop()  # type: ignore[attr-defined]
+
+                self.assertEqual(responder.calls, 0)
+                self.assertEqual(x_client.calls, 1)
+                self.assertEqual(x_client.replies[0]["text"], scope_reply)
+                self.assertEqual(replies[0]["reply_text"], scope_reply)
+                self.assertEqual(replies[0]["resolution_source"], "scope_filter")
+                self.assertEqual(processed[-1]["reason"], "scope_replied")
+
+    def test_scope_filter_allows_mma_and_bot_meta_prompts_to_openai(self):
+        allowed_examples = [
+            "@TheFightAgent Islam Makhachev vs Arman Tsarukyan prediction?",
+            "@TheFightAgent What data do you use for fight predictions?",
+            "@TheFightAgent How does this AI bot make its picks?",
+        ]
+
+        for index, text in enumerate(allowed_examples, start=1):
+            with self.subTest(text=text):
+                responder = FakeResponder(text="In-scope answer.")
+                x_client = FakeXClient()
+                app = self.make_app(responder=responder, x_client=x_client)
+                payload = self.make_payload(text=text, tweet_id=f"ai-{index}")
+
+                app.runtime.bundle.processor.process_inbox_record({"payload": payload}, source="manual")  # type: ignore[attr-defined]
+                replies = list(read_jsonl(app.runtime.state.replies_path))  # type: ignore[attr-defined]
+                processed = list(read_jsonl(app.runtime.state.processed_ids_path))  # type: ignore[attr-defined]
+                app.runtime.stop()  # type: ignore[attr-defined]
+
+                self.assertEqual(responder.calls, 1)
+                self.assertEqual(x_client.calls, 1)
+                self.assertEqual(replies[0]["reply_text"], "In-scope answer.")
+                self.assertNotEqual(replies[0]["resolution_source"], "scope_filter")
+                self.assertEqual(processed[-1]["reason"], "replied")
 
     def test_web_fallback_reply_preserves_long_text(self):
         text = "word " * 200

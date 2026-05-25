@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from context_builder import MmaContextBuilder, normalize_text
+from mention_scope import SCOPE_REPLY_ACTION, SCOPE_REPLY_TEXT, classify_mention_scope
 from openai_service import OpenAIResponder
 from settings import Config
 from storage import StateStore, utc_now_iso
@@ -85,6 +86,22 @@ class EventProcessor:
             return
 
         analysis_text = self._analysis_text(payload, event, tweet_text)
+        scope_matches = self.context_builder.match_fighters(analysis_text, limit=2)
+        scope_decision = classify_mention_scope(
+            analysis_text,
+            matched_fighters=[match.fighter_name for match in scope_matches],
+        )
+        if scope_decision.action == SCOPE_REPLY_ACTION:
+            self._send_scope_reply(
+                event_key=event_key,
+                tweet_id=tweet_id,
+                payload=payload,
+                scope_reason=scope_decision.reason,
+                scope_signals=scope_decision.signals,
+                source=source,
+            )
+            return
+
         context_payload = self.context_builder.build_context(analysis_text)
 
         try:
@@ -154,6 +171,54 @@ class EventProcessor:
             }
         )
         self.state.mark_processed(event_key, tweet_id, "replied")
+
+    def _send_scope_reply(
+        self,
+        event_key: str,
+        tweet_id: str,
+        payload: dict[str, Any],
+        scope_reason: str,
+        scope_signals: list[str],
+        source: str,
+    ) -> None:
+        try:
+            reply_response = self.x_client.create_reply(tweet_id=tweet_id, text=SCOPE_REPLY_TEXT)
+        except Exception as exc:
+            self._record_failure(
+                event_key=event_key,
+                tweet_id=tweet_id,
+                payload=payload,
+                phase="scope_x_post",
+                error=str(exc),
+                retryable=False,
+                source=source,
+            )
+            self.state.mark_processed(event_key, tweet_id, "scope_reply_failed")
+            return
+
+        reply_id = (
+            reply_response.get("data", {}).get("id")
+            if isinstance(reply_response, dict)
+            else None
+        )
+
+        self.state.record_reply(
+            {
+                "recorded_at": utc_now_iso(),
+                "event_key": event_key,
+                "tweet_id": tweet_id,
+                "reply_id": str(reply_id) if reply_id else "",
+                "reply_text": SCOPE_REPLY_TEXT,
+                "matched_fighters": [],
+                "resolution_source": "scope_filter",
+                "openai_response_id": None,
+                "model": None,
+                "scope_reason": scope_reason,
+                "scope_signals": scope_signals,
+                "source": source,
+            }
+        )
+        self.state.mark_processed(event_key, tweet_id, "scope_replied")
 
     def _record_failure(
         self,
