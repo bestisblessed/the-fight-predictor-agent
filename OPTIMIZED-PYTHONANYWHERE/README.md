@@ -42,14 +42,11 @@ cp .env.example .env
 
 Fill in the `.env` values before running anything.
 
-## Local smoke test
+## Local run
 
 ```bash
 cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED-PYTHONANYWHERE
 source .venv/bin/activate
-python -m unittest discover -s tests -v
-python smoke_test_questions.py --local-only
-python smoke_test_questions.py  # uses OpenAI for no-post fallback checks when OPENAI_API_KEY is set
 python app.py
 ```
 

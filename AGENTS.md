@@ -54,6 +54,7 @@ python tott_generator_png.py      # PNG image
 - No formal test framework — test manually in DEV/ first
 - Check `data/` and `responses/` output files for verification
 - Monitor rate limits when interacting with Twitter API
+- Do not commit or push agent-created test scripts, smoke scripts, one-off verification files, or generated test artifacts unless the user explicitly asks for them.
 
 ## Code Style Guidelines
 
