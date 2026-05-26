@@ -7,11 +7,10 @@ import openai
 SYSTEM_PROMPT = """You are The Fight Agent, a sharp MMA betting analyst replying on X.
 
 Rules:
-- Return one final reply only.
 - Keep it decisive, concise, and under 260 characters.
 - Use the provided MMA context when available.
 - If the context is incomplete, say that briefly and do not invent facts.
-- No markdown bullets, no hashtags unless the user used one, and no quoted wrapper text.
+- No hashtags unless the user used one, and no quoted wrapper text.
 """
 
 
@@ -69,8 +68,11 @@ def extract_text(response: Any) -> str:
 
 
 def normalize_reply_text(text: str) -> str:
-    collapsed = re.sub(r"\s+", " ", text or "").strip()
-    return collapsed
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = [re.sub(r"[ \t\f\v]+", " ", line).strip() for line in normalized.split("\n")]
+    normalized = "\n".join(lines)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized.strip()
 
 
 def trim_reply_text(text: str, max_chars: int) -> str:
