@@ -84,6 +84,7 @@ class Config:
             ]
         )
         self.require_data_files(["fighter_info.csv", "event_data_sherdog.csv"])
+        self.require_fighter_career_source()
 
     def require_x_admin(self) -> None:
         self.require(
@@ -117,6 +118,18 @@ class Config:
         if missing:
             joined = ", ".join(missing)
             raise RuntimeError(f"Missing required data files in {self.data_dir}: {joined}")
+
+    def require_fighter_career_source(self) -> None:
+        if (self.data_dir / "fighters.zip").exists():
+            return
+
+        fighters_dir = self.data_dir / "fighters"
+        if fighters_dir.exists() and any(fighters_dir.glob("*.csv")):
+            return
+
+        raise RuntimeError(
+            f"Missing fighter career source in {self.data_dir}: expected fighters.zip or fighters/*.csv"
+        )
 
     def validate_public_base_url(self) -> None:
         if not self.public_base_url:

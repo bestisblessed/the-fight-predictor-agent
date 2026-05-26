@@ -1,4 +1,7 @@
+import csv
+import io
 import re
+import zipfile
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -8,6 +11,7 @@ import pandas as pd
 
 
 WORD_RE = re.compile(r"[a-z0-9']+")
+FIGHTER_FILE_ID_RE = re.compile(r"_(\d+)\.csv$", re.IGNORECASE)
 MAX_ALIAS_TOKENS = 4
 
 
@@ -18,6 +22,12 @@ def normalize_text(value: Any) -> str:
     cleaned = re.sub(r"[^a-z0-9\s']", " ", lowered)
     collapsed = re.sub(r"\s+", " ", cleaned).strip()
     return collapsed.replace("'", "")
+
+
+def clean_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def token_sort_text(value: str) -> str:
@@ -36,7 +46,19 @@ class FighterMatch:
 
 
 class MmaContextBuilder:
-    def __init__(self, fighter_info_path: Path, event_data_path: Path):
+    def __init__(
+        self,
+        fighter_info_path: Path,
+        event_data_path: Path,
+        fighter_career_dir: Path | None = None,
+        fighter_career_zip_path: Path | None = None,
+    ):
+        data_dir = fighter_info_path.parent
+        self.fighter_career_dir = fighter_career_dir or data_dir / "fighters"
+        self.fighter_career_zip_path = fighter_career_zip_path or data_dir / "fighters.zip"
+        self.career_files_by_id = self._build_career_file_index()
+        self.career_zip_members_by_id = self._build_career_zip_index()
+
         self.fighter_info = pd.read_csv(fighter_info_path).fillna("")
         self.fighter_info["normalized_name"] = self.fighter_info["Fighter"].map(normalize_text)
         self.fighter_info["sort_fights"] = self.fighter_info["Wins"].astype(int) + self.fighter_info["Losses"].astype(int)
@@ -242,7 +264,91 @@ class MmaContextBuilder:
         if recent_fights:
             lines.append("Last 5 fights:")
             lines.extend(recent_fights)
+        career_fights = self._career_fights(match)
+        if career_fights:
+            lines.append("Full career record:")
+            lines.extend(career_fights)
         return "\n".join(lines)
+
+    def _build_career_file_index(self) -> dict[str, Path]:
+        if not self.fighter_career_dir.exists() or not self.fighter_career_dir.is_dir():
+            return {}
+
+        files_by_id: dict[str, Path] = {}
+        for path in self.fighter_career_dir.glob("*.csv"):
+            match = FIGHTER_FILE_ID_RE.search(path.name)
+            if match:
+                files_by_id.setdefault(match.group(1), path)
+        return files_by_id
+
+    def _build_career_zip_index(self) -> dict[str, str]:
+        if not self.fighter_career_zip_path.exists():
+            return {}
+
+        members_by_id: dict[str, str] = {}
+        try:
+            with zipfile.ZipFile(self.fighter_career_zip_path) as archive:
+                for member_name in archive.namelist():
+                    if not member_name.lower().endswith(".csv"):
+                        continue
+                    match = FIGHTER_FILE_ID_RE.search(Path(member_name).name)
+                    if match:
+                        members_by_id.setdefault(match.group(1), member_name)
+        except (OSError, zipfile.BadZipFile):
+            return {}
+        return members_by_id
+
+    def _career_fights(self, match: FighterMatch) -> list[str]:
+        rows = self._career_rows(match.fighter_id)
+        return [line for row in rows if (line := self._format_career_row(row))]
+
+    def _career_rows(self, fighter_id: str) -> list[dict[str, str]]:
+        normalized_id = str(fighter_id).strip()
+        if not normalized_id:
+            return []
+
+        path = self.career_files_by_id.get(normalized_id)
+        if path:
+            try:
+                with path.open("r", encoding="utf-8", newline="") as handle:
+                    return list(csv.DictReader(handle))
+            except OSError:
+                return []
+
+        member_name = self.career_zip_members_by_id.get(normalized_id)
+        if not member_name:
+            return []
+
+        try:
+            with zipfile.ZipFile(self.fighter_career_zip_path) as archive:
+                with archive.open(member_name) as raw_handle:
+                    text_handle = io.TextIOWrapper(raw_handle, encoding="utf-8", newline="")
+                    return list(csv.DictReader(text_handle))
+        except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, csv.Error):
+            return []
+
+    @staticmethod
+    def _format_career_row(row: dict[str, Any]) -> str:
+        result = clean_cell(row.get("Result")).lower()
+        opponent = clean_cell(row.get("Opponent"))
+        event_date = clean_cell(row.get("Event Date"))
+        method = clean_cell(row.get("Method/Referee"))
+        rounds = clean_cell(row.get("Rounds"))
+        fight_time = clean_cell(row.get("Time"))
+        if not any([result, opponent, event_date, method, rounds, fight_time]):
+            return ""
+
+        line = f"- {result or 'unknown'}"
+        if opponent:
+            line += f" vs {opponent}"
+        if event_date:
+            line += f", {event_date}"
+        if method:
+            line += f", {method}"
+        if rounds or fight_time:
+            round_time = " ".join(part for part in [f"R{rounds}" if rounds else "", fight_time] if part)
+            line += f", {round_time}"
+        return line
 
     def _last_five_fights(self, match: FighterMatch) -> list[str]:
         fighter_id = match.fighter_id

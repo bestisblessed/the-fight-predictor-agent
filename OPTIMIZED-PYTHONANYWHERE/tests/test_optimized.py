@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -358,6 +359,7 @@ class OptimizedTests(unittest.TestCase):
             ]
         )
         event_df.to_csv(self.data_dir / "event_data_sherdog.csv", index=False)
+        (self.data_dir / "fighters.zip").write_bytes(b"test placeholder")
 
         self.config = Config(
             root_dir=self.root,
@@ -448,6 +450,91 @@ class OptimizedTests(unittest.TestCase):
             {"Yadong Song", "Deiveson Figueiredo"},
         )
         self.assertEqual(set(typo["matched_fighters"]), {"Conor McGregor", "Max Holloway"})
+
+    def test_context_includes_direct_fighter_career_file(self):
+        career_dir = self.data_dir / "fighters"
+        career_dir.mkdir()
+        (career_dir / "Islam_Makhachev_100.csv").write_text(
+            "Result,Opponent,Event Date,Method/Referee,Rounds,Time\n"
+            "win,Alexander Volkanovski,Feb / 12 / 2023,Decision (Unanimous)Herb Dean,5,5:00\n"
+            "win,Charles Oliveira,Oct / 22 / 2022,Submission (Arm-Triangle Choke)Jason Herzog,2,3:16\n",
+            encoding="utf-8",
+        )
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+
+        context = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
+
+        self.assertIn("Full career record:", context["context_text"])
+        self.assertIn(
+            "- win vs Alexander Volkanovski, Feb / 12 / 2023, Decision (Unanimous)Herb Dean, R5 5:00",
+            context["context_text"],
+        )
+        self.assertIn(
+            "- win vs Charles Oliveira, Oct / 22 / 2022, Submission (Arm-Triangle Choke)Jason Herzog, R2 3:16",
+            context["context_text"],
+        )
+
+    def test_context_reads_fighter_career_from_zip_when_directory_missing(self):
+        with zipfile.ZipFile(self.data_dir / "fighters.zip", "w") as archive:
+            archive.writestr(
+                "fighters/Arman_Tsarukyan_200.csv",
+                "Result,Opponent,Event Date,Method/Referee,Rounds,Time\n"
+                "win,Beneil Dariush,Dec / 02 / 2023,KO (Punches)Dan Miragliotta,1,1:04\n",
+            )
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+
+        context = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
+
+        self.assertIn("Full career record:", context["context_text"])
+        self.assertIn(
+            "- win vs Beneil Dariush, Dec / 02 / 2023, KO (Punches)Dan Miragliotta, R1 1:04",
+            context["context_text"],
+        )
+
+    def test_context_keeps_existing_summary_when_fighter_career_file_missing(self):
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+
+        context = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
+
+        self.assertIn("Islam Makhachev: 26-1", context["context_text"])
+        self.assertIn("Last 5 fights:", context["context_text"])
+        self.assertNotIn("Full career record:", context["context_text"])
+
+    def test_require_runtime_accepts_zip_or_direct_fighter_career_source(self):
+        (self.data_dir / "fighters.zip").write_bytes(b"not a real zip but present")
+        self.config.require_runtime()
+
+        (self.data_dir / "fighters.zip").unlink()
+        career_dir = self.data_dir / "fighters"
+        career_dir.mkdir()
+        (career_dir / "Islam_Makhachev_100.csv").write_text(
+            "Result,Opponent,Event Date,Method/Referee,Rounds,Time\n",
+            encoding="utf-8",
+        )
+        self.config.require_runtime()
+
+        (career_dir / "Islam_Makhachev_100.csv").unlink()
+        with self.assertRaisesRegex(RuntimeError, "fighters.zip or fighters/.*\\.csv"):
+            self.config.require_runtime()
+
+    def test_runtime_bundle_attaches_fighters_zip_to_openai_fallback_files(self):
+        (self.data_dir / "fighters.zip").write_bytes(b"zip bytes")
+
+        runtime = FightAgentRuntime(build_runtime_bundle(self.config), start_worker=False)
+
+        attached_paths = [path.name for path in runtime.bundle.responder.data_file_paths]
+        self.assertIn("fighter_info.csv", attached_paths)
+        self.assertIn("event_data_sherdog.csv", attached_paths)
+        self.assertIn("fighters.zip", attached_paths)
 
     def test_follow_up_text_uses_parent_tweet_context(self):
         parent_text = (

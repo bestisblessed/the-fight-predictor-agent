@@ -8,7 +8,7 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - Verifies CRC and `x-twitter-webhooks-signature`.
 - Writes accepted events to `state/events_inbox.jsonl`.
 - Processes mentions in a single in-process background worker.
-- Builds local context from `data/fighter_info.csv` and `data/event_data_sherdog.csv`, including typo and reversed-name matching.
+- Builds local context from `data/fighter_info.csv`, `data/event_data_sherdog.csv`, and per-fighter career CSVs from `data/fighters/*.csv` or `data/fighters.zip`, including typo and reversed-name matching.
 - Generates one text reply with the OpenAI Responses API, with Code Interpreter and web search fallbacks when local matching is incomplete.
 - Posts one direct reply through `POST /2/tweets`.
 
@@ -26,6 +26,7 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 
 - `app.py`: Flask webhook service with `/x/webhook` and `/healthz`.
 - `admin.py`: setup and recovery CLI.
+- `data/fighters.zip`: deployable archive of per-fighter career CSVs. If `data/fighters/` exists, the app uses the extracted CSVs first; otherwise it reads exact fighter files directly from this ZIP without extracting it.
 - `state/`: file-backed state, retries, dedupe, and reply logs.
 - `systemd/`: systemd service unit.
 - `nginx/`: Nginx reverse-proxy example.
@@ -172,6 +173,8 @@ pip install --no-cache-dir -r requirements.txt
 ```
 
 3. Create `.env` from `.env.example`
+   - Keep `data/fighters.zip` in this folder, or provide extracted CSVs in `data/fighters/`.
+   - The runtime prefers `data/fighters/*.csv` and falls back to reading matching fighter IDs directly from `data/fighters.zip`.
 4. On the **Web** tab:
    - create a new Flask web app with manual configuration
    - point the virtualenv at `/home/bestisblessed/the-fight-predictor-agent/OPTIMIZED-PYTHONANYWHERE/.venv`
