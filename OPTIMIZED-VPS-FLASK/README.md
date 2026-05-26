@@ -1,4 +1,6 @@
-# OPTIMIZED
+# OPTIMIZED-VPS-FLASK
+
+Legacy/reference Flask deployment for generic VPS/server hosting with Gunicorn, systemd, and Nginx. This is not the active PythonAnywhere production bot; active production behavior lives in `../OPTIMIZED-PYTHONANYWHERE/`.
 
 Webhook-only X fight prediction agent. This replaces the cron + Google bridge flow with one always-on Flask service, local CSV-backed fighter context, OpenAI text generation, and direct X replies.
 
@@ -31,7 +33,7 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 ## Local setup
 
 ```bash
-cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED
+cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED-VPS-FLASK
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -43,7 +45,7 @@ Fill in the `.env` values before running anything.
 ## Local run
 
 ```bash
-cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED
+cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED-VPS-FLASK
 source .venv/bin/activate
 python app.py
 ```
@@ -60,7 +62,7 @@ PUBLIC_BASE_URL=https://your-tunnel-hostname.example
 
 ## First-run admin flow
 
-Run these from `OPTIMIZED/` after the service is reachable over HTTPS:
+Run these from `OPTIMIZED-VPS-FLASK/` after the service is reachable over HTTPS:
 
 ```bash
 python admin.py resolve-bot-user
@@ -92,7 +94,7 @@ python admin.py retry-failed
 ### 1. Create the venv and install dependencies
 
 ```bash
-cd /home/trinity/the-fight-predictor-agent/OPTIMIZED
+cd /home/trinity/the-fight-predictor-agent/OPTIMIZED-VPS-FLASK
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -100,7 +102,7 @@ pip install -r requirements.txt
 
 ### 2. Add the environment file
 
-Create `/home/trinity/the-fight-predictor-agent/OPTIMIZED/.env` from `.env.example`.
+Create `/home/trinity/the-fight-predictor-agent/OPTIMIZED-VPS-FLASK/.env` from `.env.example`.
 
 ### 3. Install the systemd unit
 
@@ -137,7 +139,7 @@ Run a single worker only. The runtime is intentionally single-process so the in-
 Example:
 
 ```bash
-cd /home/trinity/the-fight-predictor-agent/OPTIMIZED
+cd /home/trinity/the-fight-predictor-agent/OPTIMIZED-VPS-FLASK
 source .venv/bin/activate
 gunicorn --workers 1 --bind 127.0.0.1:8080 app:create_app\(\)
 ```
