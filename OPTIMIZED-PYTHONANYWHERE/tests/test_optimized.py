@@ -47,6 +47,7 @@ class FakeXClient:
         self.secret = secret
         self.error = error
         self.calls = 0
+        self.retweets = []
         self.parent_texts = parent_texts or {}
 
     def crc_response_token(self, crc_token):
@@ -60,6 +61,10 @@ class FakeXClient:
         if self.error:
             raise self.error
         return {"data": {"id": f"reply-{tweet_id}"}}
+
+    def retweet(self, user_id, tweet_id):
+        self.retweets.append({"user_id": str(user_id), "tweet_id": str(tweet_id)})
+        return {"data": {"id": str(tweet_id), "retweeted": True}}
 
     def get_tweet_text(self, tweet_id):
         return self.parent_texts.get(str(tweet_id), "")
@@ -568,6 +573,33 @@ class OptimizedTests(unittest.TestCase):
         self.assertEqual(captured_headers, ["Bearer bearer", "Bearer fresh-bearer-token"])
         mocked_post.assert_called_once()
 
+    def test_retweet_uses_user_retweets_endpoint_with_oauth1(self):
+        client = XApiClient(self.config)
+        captured_requests = []
+
+        def fake_request(method, url, headers, auth, json, timeout):
+            captured_requests.append(
+                {
+                    "method": method,
+                    "url": url,
+                    "headers": headers,
+                    "auth": auth,
+                    "json": json,
+                    "timeout": timeout,
+                }
+            )
+            return FakeHttpResponse(200, {"data": {"id": "12345", "retweeted": True}})
+
+        with patch("x_api.requests.request", side_effect=fake_request):
+            response = client.retweet(user_id="42", tweet_id="12345")
+
+        self.assertEqual(response["data"]["retweeted"], True)
+        self.assertEqual(len(captured_requests), 1)
+        self.assertEqual(captured_requests[0]["method"], "POST")
+        self.assertEqual(captured_requests[0]["url"], "https://api.x.com/2/users/42/retweets")
+        self.assertEqual(captured_requests[0]["json"], {"tweet_id": "12345"})
+        self.assertIsNotNone(captured_requests[0]["auth"])
+
     def test_webhook_post_writes_inbox_and_returns_200(self):
         app = self.make_app()
         client = app.test_client()
@@ -612,6 +644,7 @@ class OptimizedTests(unittest.TestCase):
         self.assertEqual(len(processed), 1)
         self.assertEqual(responder.calls, 1)
         self.assertEqual(x_client.calls, 1)
+        self.assertEqual(x_client.retweets, [{"user_id": "42", "tweet_id": "reply-111"}])
 
     def test_duplicate_webhook_delivery_does_not_double_reply(self):
         responder = FakeResponder(text="Islam by decision.")

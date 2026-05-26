@@ -10,14 +10,14 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - Processes mentions in a single in-process background worker.
 - Builds local context from `data/fighter_info.csv` and `data/event_data_sherdog.csv`, including typo and reversed-name matching.
 - Generates one text reply with the OpenAI Responses API, with Code Interpreter and web search fallbacks when local matching is incomplete.
-- Posts one direct reply through `POST /2/tweets`.
+- Posts one direct reply through `POST /2/tweets`, then reposts that reply through `POST /2/users/:id/retweets`.
 
 ## What this version intentionally does not do
 
 - No cron polling.
 - No Google Drive, Google Docs, Google Sheets, or IFTTT.
 - No database.
-- No media replies, retweets, or threads.
+- No media replies or threads.
 - No image generation.
 - Code Interpreter is used only as a fallback resolver for ambiguous/missing local matches.
 - Web search is used only after local matching and Code Interpreter cannot fully resolve the request.
