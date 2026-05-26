@@ -131,6 +131,9 @@ class StateStore:
             )
 
     def read_inbox_records_from_offset(self, offset: int) -> tuple[list[dict[str, Any]], int]:
+        if not self.events_inbox_path.exists():
+            return [], 0
+
         file_size = self.events_inbox_path.stat().st_size
         if offset > file_size:
             offset = 0

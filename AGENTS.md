@@ -2,7 +2,7 @@
 
 ## Current Deployed Runtime Notice
 
-Current deployed working folder is **OPTIMIZED-PYTHONANYWHERE/**. The active runtime is the PythonAnywhere web app plus the always-on worker. **PRODUCTION/** is a legacy cron deployment and should not be used for active bot changes unless explicitly requested.
+Current deployed working folder is **OPTIMIZED-PYTHONANYWHERE/**. The active runtime is the PythonAnywhere web app plus the always-on worker. **OPTIMIZED-VPS-FLASK/** is legacy/reference VPS deployment code for Gunicorn/systemd/Nginx and should not be used for active bot changes unless explicitly requested. **PRODUCTION/** is a legacy cron deployment and should not be used for active bot changes unless explicitly requested.
 
 ## Project Overview
 
@@ -13,6 +13,7 @@ Current deployment:
 
 Other environments:
 - **DEV/**: Development and testing scripts
+- **OPTIMIZED-VPS-FLASK/**: Legacy/reference Flask deployment for generic VPS/server hosting with Gunicorn, systemd, and Nginx; inactive for current production behavior unless explicitly requested
 - **PRODUCTION/**: Legacy cron deployment; inactive for current production behavior unless explicitly requested
 - **PRODUCTION-WITH-IFTTT/**: Older variant with IFTTT integration
 - **PRODUCTION-WITH-IFTTT-DOCS/**: Older variant with Google Docs integration
@@ -26,7 +27,7 @@ Primary active runtime files:
 - `OPTIMIZED-PYTHONANYWHERE/pythonanywhere_worker.py`: Always-on worker process
 - `OPTIMIZED-PYTHONANYWHERE/service.py`: Shared service layer used by the active bot
 
-Do not make active bot changes in **PRODUCTION/** unless the user explicitly asks for the legacy cron implementation. The old **PRODUCTION/** cron job path is retained for reference only and is not the current deployed working folder.
+Do not make active bot changes in **OPTIMIZED-VPS-FLASK/** or **PRODUCTION/** unless the user explicitly asks for the legacy VPS Flask or legacy cron implementation. These old deployment paths are retained for reference only and are not the current deployed working folder.
 
 ## Running Scripts Locally
 
@@ -51,7 +52,8 @@ python tott_generator_png.py      # PNG image
 ```
 
 ### Testing Approach
-- No formal test framework — test manually in DEV/ first
+- Active PythonAnywhere unit tests live under `OPTIMIZED-PYTHONANYWHERE/tests/`; run them with `cd OPTIMIZED-PYTHONANYWHERE && python -m unittest discover -s tests -v`
+- For scripts without tests, test manually in DEV/ first
 - Check `data/` and `responses/` output files for verification
 - Monitor rate limits when interacting with Twitter API
 - Do not commit or push agent-created test scripts, smoke scripts, one-off verification files, or generated test artifacts unless the user explicitly asks for them.
@@ -174,6 +176,12 @@ from googleapiclient.discovery import build
 │   ├── service.py                    # Shared active bot behavior
 │   ├── app.py
 │   ├── settings.py
+│   └── ...
+├── OPTIMIZED-VPS-FLASK/              # Legacy VPS Flask/Gunicorn/systemd/Nginx bot
+│   ├── app.py
+│   ├── service.py
+│   ├── systemd/
+│   ├── nginx/
 │   └── ...
 └── PRODUCTION/                       # Legacy cron bot; inactive for current deployment
     ├── assistant_from_tweets.py      # Main agent loop
