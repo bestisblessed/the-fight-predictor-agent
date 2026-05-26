@@ -11,26 +11,48 @@ def utc_now_iso() -> str:
 
 
 class StateStore:
-    def __init__(self, state_dir: Path):
+    def __init__(self, state_dir: Path, logs_dir: Path | None = None):
         self.state_dir = state_dir
+        self.logs_dir = logs_dir or state_dir
         self.lock = Lock()
-        self.webhook_config_path = self.state_dir / "webhook_config.json"
-        self.events_inbox_path = self.state_dir / "events_inbox.jsonl"
-        self.processed_ids_path = self.state_dir / "processed_event_ids.jsonl"
-        self.replies_path = self.state_dir / "replies.jsonl"
-        self.failed_jobs_path = self.state_dir / "failed_jobs.jsonl"
-        self.worker_checkpoint_path = self.state_dir / "worker_checkpoint.json"
-        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.webhook_config_path = self.logs_dir / "webhook_config.json"
+        self.events_inbox_path = self.logs_dir / "events_inbox.jsonl"
+        self.processed_ids_path = self.logs_dir / "processed_event_ids.jsonl"
+        self.replies_path = self.logs_dir / "replies.jsonl"
+        self.failed_jobs_path = self.logs_dir / "failed_jobs.jsonl"
+        self.worker_checkpoint_path = self.logs_dir / "worker_checkpoint.json"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        self._copy_legacy_logs_if_needed()
         for path in [
             self.events_inbox_path,
-            self.processed_ids_path,
             self.replies_path,
             self.failed_jobs_path,
         ]:
             path.touch(exist_ok=True)
+        self.processed_ids_path.touch(exist_ok=True)
         if not self.worker_checkpoint_path.exists():
             self.worker_checkpoint_path.write_text('{"offset": 0}\n', encoding="utf-8")
         self.processed_ids = self._load_processed_ids()
+
+    def _copy_legacy_logs_if_needed(self) -> None:
+        if self.logs_dir == self.state_dir:
+            return
+        for filename in [
+            "events_inbox.jsonl",
+            "processed_event_ids.jsonl",
+            "replies.jsonl",
+            "failed_jobs.jsonl",
+            "worker_checkpoint.json",
+            "webhook_config.json",
+            "openai_file_ids.json",
+        ]:
+            legacy_path = self.state_dir / filename
+            target_path = self.logs_dir / filename
+            if not legacy_path.exists() or legacy_path.stat().st_size == 0:
+                continue
+            if target_path.exists() and target_path.stat().st_size > 0:
+                continue
+            target_path.write_bytes(legacy_path.read_bytes())
 
     def _load_processed_ids(self) -> set[str]:
         processed = set()

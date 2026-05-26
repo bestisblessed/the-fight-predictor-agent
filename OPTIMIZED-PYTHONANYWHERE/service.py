@@ -445,7 +445,7 @@ def build_runtime_bundle(
     context_builder: MmaContextBuilder | None = None,
 ) -> RuntimeBundle:
     config.ensure_directories()
-    state = StateStore(config.state_dir)
+    state = StateStore(config.state_dir, config.logs_dir)
     builder = context_builder or MmaContextBuilder(
         fighter_info_path=config.data_dir / "fighter_info.csv",
         event_data_path=config.data_dir / "event_data_sherdog.csv",
@@ -460,7 +460,7 @@ def build_runtime_bundle(
             config.data_dir / "fighter_info.csv",
             config.data_dir / "event_data_sherdog.csv",
         ],
-        file_cache_path=config.state_dir / "openai_file_ids.json",
+        file_cache_path=config.logs_dir / "openai_file_ids.json",
     )
     processor = EventProcessor(
         config=config,

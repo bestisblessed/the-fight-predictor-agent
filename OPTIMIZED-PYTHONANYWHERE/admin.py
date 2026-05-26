@@ -22,13 +22,13 @@ def build_parser() -> argparse.ArgumentParser:
     replay_parser.add_argument("--from-date", required=True, help="UTC start in yyyymmddhhmm")
     replay_parser.add_argument("--to-date", required=True, help="UTC end in yyyymmddhhmm")
 
-    retry_parser = subparsers.add_parser("retry-failed", help="Retry failed retryable jobs from state/failed_jobs.jsonl")
+    retry_parser = subparsers.add_parser("retry-failed", help="Retry failed retryable jobs from logs/failed_jobs.jsonl")
     retry_parser.add_argument("--limit", type=int, default=None, help="Optional retry cap")
     return parser
 
 
 def load_webhook_id(config: Config) -> str:
-    webhook_id = str((StateStore(config.state_dir).load_webhook_config().get("webhook_id") or "")).strip()
+    webhook_id = str((StateStore(config.state_dir, config.logs_dir).load_webhook_config().get("webhook_id") or "")).strip()
     if not webhook_id:
         raise RuntimeError("webhook_id is not set. Run create-webhook first.")
     return webhook_id
@@ -48,7 +48,7 @@ def main() -> None:
         return
 
     config.require_x_admin()
-    state = StateStore(config.state_dir)
+    state = StateStore(config.state_dir, config.logs_dir)
     x_client = XApiClient(config)
 
     if args.command == "resolve-bot-user":

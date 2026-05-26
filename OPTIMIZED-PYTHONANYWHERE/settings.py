@@ -16,6 +16,7 @@ class Config:
     root_dir: Path
     data_dir: Path
     state_dir: Path
+    logs_dir: Path
     openai_api_key: str | None
     x_api_key: str | None
     x_api_secret: str | None
@@ -40,6 +41,7 @@ class Config:
             root_dir=ROOT_DIR,
             data_dir=ROOT_DIR / "data",
             state_dir=ROOT_DIR / "state",
+            logs_dir=ROOT_DIR / "logs",
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             x_api_key=os.getenv("X_API_KEY"),
             x_api_secret=os.getenv("X_API_SECRET"),
@@ -70,7 +72,7 @@ class Config:
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.state_dir.mkdir(parents=True, exist_ok=True)
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
 
     def require_runtime(self) -> None:
         self.require(
