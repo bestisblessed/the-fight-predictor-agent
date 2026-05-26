@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app
 from context_builder import MmaContextBuilder
-from openai_service import trim_reply_text
+from openai_service import SYSTEM_PROMPT, normalize_reply_text, trim_reply_text
 from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs
 from settings import Config
 from storage import StateStore, read_jsonl
@@ -254,6 +254,26 @@ class OptimizedTests(unittest.TestCase):
         text = "word " * 200
         trimmed = trim_reply_text(text, 50)
         self.assertLessEqual(len(trimmed), 50)
+
+    def test_system_prompt_does_not_force_single_reply_or_ban_bullets(self):
+        self.assertNotIn("Return one final reply only.", SYSTEM_PROMPT)
+        self.assertNotIn("No markdown bullets", SYSTEM_PROMPT)
+
+    def test_normalize_reply_text_preserves_paragraphs_and_lists(self):
+        text = (
+            "Pick: Fighter A  by decision\n\n"
+            "- Recent form: better pace\tand cardio\n"
+            "- Key risk: takedown defense"
+        )
+
+        reply = normalize_reply_text(text)
+
+        self.assertEqual(
+            reply,
+            "Pick: Fighter A by decision\n\n"
+            "- Recent form: better pace and cardio\n"
+            "- Key risk: takedown defense",
+        )
 
     def test_webhook_post_writes_inbox_and_returns_200(self):
         app = self.make_app()

@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import create_app
 from context_builder import MmaContextBuilder
-from openai_service import format_web_fallback_reply
+from openai_service import SYSTEM_PROMPT, format_web_fallback_reply, normalize_reply_text
 from service import FightAgentRuntime, build_runtime_bundle, retry_failed_jobs, run_checkpoint_worker
 from settings import Config
 from storage import StateStore, read_jsonl
@@ -535,13 +535,44 @@ class OptimizedTests(unittest.TestCase):
         self.assertGreater(len(reply), 900)
         self.assertIn("https://example.com/a", reply)
 
-    def test_web_fallback_reply_discloses_lower_confidence_and_sources(self):
+    def test_normalize_reply_text_preserves_paragraphs_and_lists(self):
+        text = (
+            "Pick: Fighter A  by decision\n\n"
+            "- Recent form: better pace\tand cardio\n"
+            "- Key risk: takedown defense"
+        )
+
+        reply = normalize_reply_text(text)
+
+        self.assertEqual(
+            reply,
+            "Pick: Fighter A by decision\n\n"
+            "- Recent form: better pace and cardio\n"
+            "- Key risk: takedown defense",
+        )
+
+    def test_system_prompt_does_not_force_one_direct_reply_wording(self):
+        self.assertNotIn("Write one direct fight prediction reply.", SYSTEM_PROMPT)
+
+    def test_web_fallback_reply_does_not_auto_add_disclosure(self):
+        reply = format_web_fallback_reply(
+            "I lean Fighter A by decision.",
+            ["https://example.com/a"],
+        )
+
+        self.assertNotIn("Local dataset was missing/ambiguous", reply)
+        self.assertNotIn("confidence lower", reply)
+        self.assertIn("I lean Fighter A by decision.", reply)
+        self.assertIn("https://example.com/a", reply)
+
+    def test_web_fallback_reply_keeps_sources_without_disclosure(self):
         reply = format_web_fallback_reply(
             "I lean Fighter A by decision.",
             ["https://example.com/a", "https://example.com/b"],
         )
 
-        self.assertIn("Local dataset was missing/ambiguous, so I used web sources; confidence lower.", reply)
+        self.assertNotIn("Local dataset was missing/ambiguous", reply)
+        self.assertNotIn("confidence lower", reply)
         self.assertIn("https://example.com/a", reply)
         self.assertIn("https://example.com/b", reply)
 
