@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -361,6 +362,8 @@ class OptimizedTests(unittest.TestCase):
             ]
         )
         event_df.to_csv(self.data_dir / "event_data_sherdog.csv", index=False)
+        with zipfile.ZipFile(self.data_dir / "fighters.zip", "w"):
+            pass
 
         self.config = Config(
             root_dir=self.root,
@@ -451,6 +454,87 @@ class OptimizedTests(unittest.TestCase):
             {"Yadong Song", "Deiveson Figueiredo"},
         )
         self.assertEqual(set(typo["matched_fighters"]), {"Conor McGregor", "Max Holloway"})
+
+    def test_direct_fighter_career_csv_rows_are_added_to_context(self):
+        fighter_dir = self.data_dir / "fighters"
+        fighter_dir.mkdir()
+        (fighter_dir / "Islam_Makhachev_100.csv").write_text(
+            "\n".join(
+                [
+                    "Result,Opponent,Event Date,Method/Referee,Rounds,Time",
+                    "win,Amanda Ribas,Jul / 26 / 2025,TKO (Punches) Herb Dean,2,2:59",
+                    "loss,Jane Doe,May / 01 / 2024,Decision (Unanimous),3,5:00",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+
+        context = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
+
+        self.assertIn("Full career fight log:", context["context_text"])
+        self.assertIn(
+            "- win vs Amanda Ribas, Jul / 26 / 2025, TKO (Punches) Herb Dean, R2 2:59",
+            context["context_text"],
+        )
+        self.assertIn(
+            "- loss vs Jane Doe, May / 01 / 2024, Decision (Unanimous), R3 5:00",
+            context["context_text"],
+        )
+
+    def test_fighter_career_zip_is_used_when_direct_file_is_absent(self):
+        with zipfile.ZipFile(self.data_dir / "fighters.zip", "w") as archive:
+            archive.writestr(
+                "fighters/Arman_Tsarukyan_200.csv",
+                "\n".join(
+                    [
+                        "Result,Opponent,Event Date,Method/Referee,Rounds,Time",
+                        "win,Beneil Dariush,Dec / 02 / 2023,KO (Punch) Dan Miragliotta,1,1:04",
+                    ]
+                )
+                + "\n",
+            )
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+
+        context = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
+
+        self.assertIn(
+            "- win vs Beneil Dariush, Dec / 02 / 2023, KO (Punch) Dan Miragliotta, R1 1:04",
+            context["context_text"],
+        )
+
+    def test_missing_fighter_career_file_keeps_summary_context(self):
+        builder = MmaContextBuilder(
+            fighter_info_path=self.data_dir / "fighter_info.csv",
+            event_data_path=self.data_dir / "event_data_sherdog.csv",
+        )
+
+        context = builder.build_context("@TheFightAgent Islam Makhachev vs Arman Tsarukyan?")
+
+        self.assertIn("Islam Makhachev: 26-1", context["context_text"])
+        self.assertIn("Last 5 fights:", context["context_text"])
+        self.assertNotIn("Full career fight log:", context["context_text"])
+
+    def test_runtime_responder_includes_fighters_zip_when_available(self):
+        bundle = build_runtime_bundle(self.config, x_client=FakeXClient())
+
+        self.assertIn(
+            self.data_dir / "fighters.zip",
+            bundle.responder.data_file_paths,
+        )
+
+    def test_require_runtime_rejects_missing_fighter_career_sources(self):
+        (self.data_dir / "fighters.zip").unlink()
+
+        with self.assertRaisesRegex(RuntimeError, "fighters/.*fighters.zip"):
+            self.config.require_runtime()
 
     def test_follow_up_text_uses_parent_tweet_context(self):
         parent_text = (

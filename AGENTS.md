@@ -10,6 +10,7 @@ A Python-based AI agent that monitors Twitter/X mentions, sends them to OpenAI's
 
 Current deployment:
 - **OPTIMIZED-PYTHONANYWHERE/**: Active deployed bot for PythonAnywhere. Key runtime files include `pythonanywhere_wsgi.py` for the web app entrypoint, `pythonanywhere_worker.py` for the always-on worker, and `service.py` for shared bot behavior.
+- Active local context uses `data/fighter_info.csv`, `data/event_data_sherdog.csv`, and matched fighters' career CSVs. Career CSV lookup prefers `OPTIMIZED-PYTHONANYWHERE/data/fighters/*.csv` and falls back to exact members in `OPTIMIZED-PYTHONANYWHERE/data/fighters.zip` without extracting the ZIP at runtime.
 
 Other environments:
 - **DEV/**: Development and testing scripts
@@ -25,8 +26,12 @@ Primary active runtime files:
 - `OPTIMIZED-PYTHONANYWHERE/pythonanywhere_wsgi.py`: PythonAnywhere WSGI entrypoint for the web app
 - `OPTIMIZED-PYTHONANYWHERE/pythonanywhere_worker.py`: Always-on worker process
 - `OPTIMIZED-PYTHONANYWHERE/service.py`: Shared service layer used by the active bot
+- `OPTIMIZED-PYTHONANYWHERE/context_builder.py`: Local context builder; adds full career rows for matched fighter IDs when `data/fighters/*.csv` or `data/fighters.zip` contains the exact ID-suffixed file
+- `OPTIMIZED-PYTHONANYWHERE/data/fighters.zip`: Deployment-friendly career CSV archive and OpenAI Code Interpreter fallback file
 
 Do not make active bot changes in **PRODUCTION/** unless the user explicitly asks for the legacy cron implementation. The old **PRODUCTION/** cron job path is retained for reference only and is not the current deployed working folder.
+
+Runtime data validation requires `fighter_info.csv`, `event_data_sherdog.csv`, and either `data/fighters/` with CSVs or `data/fighters.zip`. If both career sources exist, direct files win and the ZIP is used only as a fallback.
 
 ## Running Scripts Locally
 
@@ -173,6 +178,8 @@ from googleapiclient.discovery import build
 │   ├── service.py                    # Shared active bot behavior
 │   ├── app.py
 │   ├── settings.py
+│   ├── data/fighters.zip             # Career CSV archive read directly, never extracted at runtime
+│   ├── data/fighters/                # Optional direct career CSV folder, preferred when present
 │   └── ...
 └── PRODUCTION/                       # Legacy cron bot; inactive for current deployment
     ├── assistant_from_tweets.py      # Main agent loop

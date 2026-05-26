@@ -78,6 +78,9 @@ def main() -> None:
         ROOT_DIR / "data" / "fighter_info.csv",
         ROOT_DIR / "data" / "event_data_sherdog.csv",
     ]
+    fighters_zip_path = ROOT_DIR / "data" / "fighters.zip"
+    if fighters_zip_path.exists():
+        data_paths.append(fighters_zip_path)
     builder = MmaContextBuilder(data_paths[0], data_paths[1])
     responder = None if args.local_only else build_responder(data_paths)
     web_only_responder = None if args.local_only else build_responder([])
