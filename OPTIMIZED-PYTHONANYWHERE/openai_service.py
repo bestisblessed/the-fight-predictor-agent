@@ -7,12 +7,11 @@ import openai
 
 
 LOCAL_FUZZY_NOTE = "I found this in local data after fuzzy lookup."
-WEB_FALLBACK_NOTE = "Local dataset was missing/ambiguous, so I used web sources; confidence lower."
 UNRESOLVED_NOTE = "Local dataset and web lookup were incomplete, so this is best-effort with lower confidence."
 
 SYSTEM_PROMPT = """You are The Fight Agent, an expert MMA handicapper replying on X.
 
-Write one direct fight prediction reply. If local MMA context is provided, anchor the answer in it.
+If local MMA context is provided, anchor the answer in it.
 
 For detailed matchup requests, include:
 - Official pick
@@ -171,7 +170,7 @@ class OpenAIResponder:
             f"Incoming mention/thread text:\n{tweet_text}\n\n"
             f"Local MMA context attempt:\n{context_text}\n\n"
             f"Code Interpreter local resolver result:\n{json.dumps(code_result or {}, ensure_ascii=True)}\n\n"
-            f"Use web search because local data was incomplete. Include this exact disclosure once: {WEB_FALLBACK_NOTE}\n"
+            "Use web search to resolve current matchup details. "
             "Pick a specific relevant MMA matchup from current web results, cite sources, and include winner, method/round, confidence, and reasoning."
         )
         try:
@@ -286,8 +285,11 @@ def extract_text(response: Any) -> str:
 
 
 def normalize_reply_text(text: str) -> str:
-    collapsed = re.sub(r"\s+", " ", text or "").strip()
-    return collapsed
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = [re.sub(r"[ \t\f\v]+", " ", line).strip() for line in normalized.split("\n")]
+    normalized = "\n".join(lines)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized.strip()
 
 
 def ensure_source_note(text: str, source_note: str) -> str:
@@ -298,7 +300,7 @@ def ensure_source_note(text: str, source_note: str) -> str:
 
 
 def format_web_fallback_reply(text: str, citations: list[str]) -> str:
-    with_note = ensure_source_note(text, WEB_FALLBACK_NOTE)
+    with_note = normalize_reply_text(text)
     unique_citations = unique_urls(citations)
     if unique_citations:
         with_note = f"{with_note} Sources: {' '.join(unique_citations[:3])}"
