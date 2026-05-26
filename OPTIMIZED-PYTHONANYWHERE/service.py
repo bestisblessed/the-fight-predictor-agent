@@ -136,6 +136,14 @@ class EventProcessor:
             if isinstance(reply_response, dict)
             else None
         )
+        self._retweet_reply(
+            reply_id=reply_id,
+            event_key=event_key,
+            tweet_id=tweet_id,
+            payload=payload,
+            phase="x_retweet",
+            source=source,
+        )
 
         self.state.record_reply(
             {
@@ -154,6 +162,50 @@ class EventProcessor:
             }
         )
         self.state.mark_processed(event_key, tweet_id, "replied")
+
+    def _retweet_reply(
+        self,
+        reply_id: Any,
+        event_key: str,
+        tweet_id: str,
+        payload: dict[str, Any],
+        phase: str,
+        source: str,
+    ) -> None:
+        if not reply_id:
+            self._record_failure(
+                event_key=event_key,
+                tweet_id=tweet_id,
+                payload=payload,
+                phase=phase,
+                error="Missing reply id; cannot retweet reply",
+                retryable=False,
+                source=source,
+            )
+            return
+        if not self.bot_user_id:
+            self._record_failure(
+                event_key=event_key,
+                tweet_id=tweet_id,
+                payload=payload,
+                phase=phase,
+                error="Missing bot user id; cannot retweet reply",
+                retryable=False,
+                source=source,
+            )
+            return
+        try:
+            self.x_client.retweet(user_id=self.bot_user_id, tweet_id=str(reply_id))
+        except Exception as exc:
+            self._record_failure(
+                event_key=event_key,
+                tweet_id=tweet_id,
+                payload=payload,
+                phase=phase,
+                error=str(exc),
+                retryable=False,
+                source=source,
+            )
 
     def _record_failure(
         self,

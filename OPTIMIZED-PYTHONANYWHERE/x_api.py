@@ -66,6 +66,15 @@ class XApiClient:
             json_body=payload,
         )
 
+    def retweet(self, user_id: str, tweet_id: str) -> dict[str, Any]:
+        self.config.require_reply_posting()
+        return self._request(
+            "POST",
+            f"/2/users/{quote(str(user_id))}/retweets",
+            auth_mode="oauth1",
+            json_body={"tweet_id": str(tweet_id)},
+        )
+
     def get_tweet_text(self, tweet_id: str) -> str:
         response = self._request(
             "GET",

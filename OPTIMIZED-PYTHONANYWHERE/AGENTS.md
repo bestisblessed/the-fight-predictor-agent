@@ -35,7 +35,7 @@
 8. `context_builder.py` matches up to two fighters from the tweet/thread text and builds structured local MMA context.
 9. If local matching is incomplete, `openai_service.py` first asks Code Interpreter to inspect the attached local CSVs, then uses web search only if the local data path still cannot fully resolve the request.
 10. `openai_service.py` calls the OpenAI Responses API using `OPENAI_MODEL` and `OPENAI_TIMEOUT_SECONDS`, then returns the model's reply text without a configured output-token cap or reply-character trim.
-11. `x_api.py` posts one direct X reply with `POST /2/tweets` using OAuth1a user credentials.
+11. `x_api.py` posts one direct X reply with `POST /2/tweets` using OAuth1a user credentials, then reposts that reply with `POST /2/users/:id/retweets`.
 12. Successful replies are written to `state/replies.jsonl`, and their dedupe keys are written to `state/processed_event_ids.jsonl` with reason `replied`.
 13. Failed jobs are written to `state/failed_jobs.jsonl` with phase and error details. Retryable failures can be reprocessed with `python admin.py retry-failed`.
 14. Webhook and subscription setup is managed manually from the PythonAnywhere console with `admin.py`: `resolve-bot-user`, `create-webhook`, `validate-webhook`, `subscribe`, `check-subscription`, and `list-subscriptions`.
