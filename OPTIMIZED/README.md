@@ -40,12 +40,11 @@ cp .env.example .env
 
 Fill in the `.env` values before running anything.
 
-## Local smoke test
+## Local run
 
 ```bash
 cd /Users/td/Code/the-fight-predictor-agent/OPTIMIZED
 source .venv/bin/activate
-python -m unittest discover -s tests -v
 python app.py
 ```
 

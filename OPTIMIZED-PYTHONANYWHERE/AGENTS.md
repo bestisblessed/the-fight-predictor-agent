@@ -15,13 +15,13 @@
 - `openai_service.py`: OpenAI Responses API wrapper. Builds the prompt, calls the configured model, falls back to Code Interpreter or web search when local matching is incomplete, and extracts reply text/citations without applying a local reply length cap.
 - `x_api.py`: X API wrapper. Handles CRC HMAC generation, webhook signature verification, bearer-token admin calls, OAuth subscription paths, and OAuth1a reply posting.
 - `storage.py`: JSON/JSONL file-backed persistence helpers for inbox, processed IDs, replies, failures, and webhook config.
-- `tests/test_optimized.py`: Unit and integration tests with mocked OpenAI/X clients for CRC, signatures, dedupe, matching, follow-up context, fallback disclosure, truncation, webhook processing, retries, and worker checkpoints.
-- `smoke_test_questions.py`: No-post smoke runner for local-only, Code Interpreter fallback, and web fallback OpenAI checks.
 - `data/fighter_info.csv`: Local fighter profile dataset used by the context builder.
 - `data/event_data_sherdog.csv`: Local fight history dataset used by the context builder.
 - `state/.gitkeep`: Keeps the state directory in git. Runtime JSON/JSONL files in this directory are generated on the server.
 - `systemd/fight-agent-optimized.service`: Example systemd service for a VPS/Raspberry Pi style deployment.
 - `nginx/fight-agent-optimized.conf`: Example Nginx reverse proxy for a VPS/Raspberry Pi style deployment.
+
+Do not commit or push agent-created test scripts, smoke scripts, one-off verification files, or generated test artifacts in this deployed runtime unless the user explicitly asks for them.
 
 ## PythonAnywhere Runtime Process
 
