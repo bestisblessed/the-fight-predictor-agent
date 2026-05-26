@@ -8,7 +8,8 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - Verifies CRC and `x-twitter-webhooks-signature`.
 - Writes accepted events to `state/events_inbox.jsonl`.
 - Processes mentions in a single in-process background worker.
-- Builds local context from `data/fighter_info.csv` and `data/event_data_sherdog.csv`, including typo and reversed-name matching.
+- Builds local context from `data/fighter_info.csv`, `data/event_data_sherdog.csv`, and matched fighters' career CSVs, including typo and reversed-name matching.
+- Reads per-fighter career logs from `data/fighters/*.csv` first, then falls back to matching members inside `data/fighters.zip` without extracting the ZIP at runtime.
 - Generates one text reply with the OpenAI Responses API, with Code Interpreter and web search fallbacks when local matching is incomplete.
 - Posts one direct reply through `POST /2/tweets`, then reposts that reply through `POST /2/users/:id/retweets`.
 
@@ -19,6 +20,7 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - No database.
 - No media replies or threads.
 - No image generation.
+- No runtime ZIP extraction; `data/fighters.zip` is read directly only for matched fighters and Code Interpreter fallback.
 - Code Interpreter is used only as a fallback resolver for ambiguous/missing local matches.
 - Web search is used only after local matching and Code Interpreter cannot fully resolve the request.
 
@@ -29,6 +31,8 @@ Webhook-only X fight prediction agent. This replaces the cron + Google bridge fl
 - `state/`: file-backed state, retries, dedupe, and reply logs.
 - `systemd/`: systemd service unit.
 - `nginx/`: Nginx reverse-proxy example.
+- `data/fighters/`: Optional direct per-fighter career CSV directory, preferred when present.
+- `data/fighters.zip`: Deployment-friendly per-fighter career CSV archive and Code Interpreter fallback file.
 
 ## Local setup
 
@@ -172,6 +176,9 @@ pip install --no-cache-dir -r requirements.txt
 ```
 
 3. Create `.env` from `.env.example`
+   - Keep `data/fighter_info.csv` and `data/event_data_sherdog.csv` in place.
+   - Provide either `data/fighters/` with per-fighter CSVs or `data/fighters.zip`.
+   - If both are present, local context uses direct CSVs first and falls back to the ZIP only when a matched fighter file is missing.
 4. On the **Web** tab:
    - create a new Flask web app with manual configuration
    - point the virtualenv at `/home/bestisblessed/the-fight-predictor-agent/OPTIMIZED-PYTHONANYWHERE/.venv`
@@ -216,6 +223,7 @@ OPENAI_TIMEOUT_SECONDS=90
 ### PythonAnywhere storage and CPU notes
 
 - `1.0 GB` disk is tight but workable for this app. Use `--no-cache-dir` when installing dependencies and keep `state/` files trimmed.
+- `data/fighters.zip` is the compact deployment artifact for fighter career logs. Keeping thousands of extracted files is optional because the runtime can read exact matched fighter CSVs from the ZIP.
 - On PythonAnywhere, CPU-seconds apply to consoles, scheduled tasks, and always-on tasks. They do not apply to normal web requests.
 - A low-volume mention workflow should fit comfortably because the web app only handles short webhook requests and the always-on task mostly sleeps between short inbox scans.
 - If mentions spike or the worker repeatedly scans a very large inbox, you can hit the tarpit and the always-on task will pause until your CPU allowance resets.

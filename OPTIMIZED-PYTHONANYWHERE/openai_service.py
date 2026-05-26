@@ -30,6 +30,9 @@ CODE_INTERPRETER_RESOLVER_PROMPT = """Use Python/pandas and the attached CSV fil
 
 Rules:
 - Inspect fighter_info.csv first, then event_data_sherdog.csv.
+- If fighters.zip is attached, inspect it when extra career context is needed.
+- Use Fighter_ID from fighter_info.csv to find the exact career CSV whose filename ends with _<Fighter_ID>.csv inside fighters.zip.
+- Include the matched fighters' full career CSV rows in context_text when resolving ambiguous names.
 - Handle misspellings, alternate order, punctuation, nicknames, and common transliterations.
 - Do not invent fighters that are not supported by the files.
 - Return JSON only, with this schema:

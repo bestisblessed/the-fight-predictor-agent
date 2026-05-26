@@ -451,15 +451,19 @@ def build_runtime_bundle(
         event_data_path=config.data_dir / "event_data_sherdog.csv",
     )
     runtime_x_client = x_client or XApiClient(config)
+    data_file_paths = [
+        config.data_dir / "fighter_info.csv",
+        config.data_dir / "event_data_sherdog.csv",
+    ]
+    fighters_zip_path = config.data_dir / "fighters.zip"
+    if fighters_zip_path.exists():
+        data_file_paths.append(fighters_zip_path)
     runtime_responder = responder or OpenAIResponder(
         api_key=config.openai_api_key or "",
         model=config.openai_model,
         escalation_model=config.openai_escalation_model or config.openai_model,
         timeout_seconds=config.openai_timeout_seconds,
-        data_file_paths=[
-            config.data_dir / "fighter_info.csv",
-            config.data_dir / "event_data_sherdog.csv",
-        ],
+        data_file_paths=data_file_paths,
         file_cache_path=config.state_dir / "openai_file_ids.json",
     )
     processor = EventProcessor(
