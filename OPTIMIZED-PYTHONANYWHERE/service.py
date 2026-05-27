@@ -80,6 +80,10 @@ class EventProcessor:
             self.state.mark_processed(event_key, tweet_id, "self_authored")
             return
 
+        if self._is_retweet_event(event):
+            self.state.mark_processed(event_key, tweet_id, "retweet_event")
+            return
+
         if not self._is_directed_at_bot(event, tweet_text):
             self.state.mark_processed(event_key, tweet_id, "not_directed_at_bot")
             return
@@ -292,6 +296,15 @@ class EventProcessor:
         if not parent_text:
             return tweet_text
         return f"Original thread tweet:\n{parent_text}\n\nFollow-up mention:\n{tweet_text}"
+
+    @staticmethod
+    def _is_retweet_event(event: dict[str, Any]) -> bool:
+        if event.get("retweeted_status"):
+            return True
+        for referenced in event.get("referenced_tweets", []) or []:
+            if isinstance(referenced, dict) and str(referenced.get("type") or "").lower() == "retweeted":
+                return True
+        return False
 
     @staticmethod
     def _looks_like_follow_up(tweet_text: str) -> bool:
