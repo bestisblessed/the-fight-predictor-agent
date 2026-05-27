@@ -1,4 +1,6 @@
 import json
+import re
+import time
 from pathlib import Path
 from threading import Lock
 from typing import Any, Iterable
@@ -55,11 +57,21 @@ class StateStore:
             target_path.write_bytes(legacy_path.read_bytes())
 
     def _load_processed_ids(self) -> set[str]:
+        start = time.perf_counter()
         processed = set()
-        for record in read_jsonl(self.processed_ids_path):
-            event_key = record.get("event_key")
+        if not self.processed_ids_path.exists():
+            return processed
+
+        for event_key in iter_event_keys_fast(self.processed_ids_path):
             if event_key:
-                processed.add(str(event_key))
+                processed.add(event_key)
+
+        elapsed = time.perf_counter() - start
+        print(
+            f"[startup] loaded {len(processed)} processed event keys in {elapsed:.3f}s "
+            f"from {self.processed_ids_path}",
+            flush=True,
+        )
         return processed
 
     def is_processed(self, event_key: str) -> bool:
@@ -176,3 +188,28 @@ def read_jsonl(path: Path) -> Iterable[dict[str, Any]]:
                 yield json.loads(stripped)
             except json.JSONDecodeError:
                 continue
+
+
+EVENT_KEY_RE = re.compile(r'"event_key"\s*:\s*"([^"]+)"')
+
+
+def iter_event_keys_fast(path: Path) -> Iterable[str]:
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            match = EVENT_KEY_RE.search(stripped)
+            if match:
+                yield match.group(1)
+                continue
+
+            try:
+                payload = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+
+            event_key = payload.get("event_key") if isinstance(payload, dict) else None
+            if event_key:
+                yield str(event_key)
