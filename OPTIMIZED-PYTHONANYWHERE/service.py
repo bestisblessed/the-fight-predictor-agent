@@ -80,6 +80,10 @@ class EventProcessor:
             self.state.mark_processed(event_key, tweet_id, "self_authored")
             return
 
+        if self._is_retweet_event(event, tweet_text):
+            self.state.mark_processed(event_key, tweet_id, "retweet_event")
+            return
+
         if not self._is_directed_at_bot(event, tweet_text):
             self.state.mark_processed(event_key, tweet_id, "not_directed_at_bot")
             return
@@ -268,6 +272,22 @@ class EventProcessor:
                 if nested_id:
                     return str(nested_id).strip()
         return ""
+
+
+    @staticmethod
+    def _is_retweet_event(event: dict[str, Any], tweet_text: str) -> bool:
+        if bool(event.get("retweeted_status")):
+            return True
+
+        normalized_text = (tweet_text or "").lstrip()
+        if normalized_text.lower().startswith("rt @"):
+            return True
+
+        for referenced in event.get("referenced_tweets", []) or []:
+            if isinstance(referenced, dict) and str(referenced.get("type") or "").lower() == "retweeted":
+                return True
+
+        return False
 
     def _is_directed_at_bot(self, event: dict[str, Any], tweet_text: str) -> bool:
         if not self.bot_handle:
