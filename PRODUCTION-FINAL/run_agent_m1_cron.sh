@@ -4,7 +4,7 @@ set -euo pipefail
 export PATH="/Users/pablo/.pyenv/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
+PYTHON_BIN="/Users/pablo/.pyenv/shims/python"
 LOCK_FILE="/tmp/fight_predictor_agent.lockfile"
 
 if [ "${FIGHT_AGENT_LOCKED:-0}" != "1" ]; then
@@ -23,8 +23,8 @@ cd "$SCRIPT_DIR"
 mkdir -p logs responses
 
 if [ ! -x "$PYTHON_BIN" ]; then
-  echo "ERROR: Python virtualenv not found or not executable: $PYTHON_BIN"
-  echo "Run: cd $SCRIPT_DIR && python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt"
+  echo "ERROR: pyenv Python shim not found or not executable: $PYTHON_BIN"
+  echo "Run: pyenv install -s 3.12.10 && cd /Users/pablo/Code/the-fight-predictor-agent && pyenv local 3.12.10 && python -m pip install -r PRODUCTION-FINAL/requirements.txt"
   exit 1
 fi
 

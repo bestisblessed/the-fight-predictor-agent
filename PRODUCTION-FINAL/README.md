@@ -7,18 +7,21 @@ This version does not run Flask, Gunicorn, Caddy, webhooks, tmux, screen, or an 
 ## Setup
 
 ```bash
-cd /Users/pablo/Code/the-fight-predictor-agent/PRODUCTION-FINAL
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-cp ../OPTIMIZED-PYTHONANYWHERE/.env .env
+cd /Users/pablo/Code/the-fight-predictor-agent
+pyenv install -s 3.12.10
+pyenv local 3.12.10
+python -m pip install --upgrade pip
+python -m pip install -r PRODUCTION-FINAL/requirements.txt
+cp OPTIMIZED-PYTHONANYWHERE/.env PRODUCTION-FINAL/.env
 ```
 
 ## Verify
 
 ```bash
+cd /Users/pablo/Code/the-fight-predictor-agent
+python -m unittest discover -s PRODUCTION-FINAL/tests -v
 cd /Users/pablo/Code/the-fight-predictor-agent/PRODUCTION-FINAL
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -u poll_mentions.py --dry-run --limit 1 --max-results 5
+python -u poll_mentions.py --dry-run --limit 1 --max-results 5
 ```
 
 `--dry-run` fetches mentions but does not reply and does not advance `logs/poll_state.json`.
