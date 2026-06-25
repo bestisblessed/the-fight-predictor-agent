@@ -5,7 +5,19 @@ export PATH="/Users/pablo/.pyenv/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
-LOCK_DIR="$SCRIPT_DIR/logs/poll_mentions.lock"
+LOCK_FILE="/tmp/fight_predictor_agent.lockfile"
+
+if [ "${FIGHT_AGENT_LOCKED:-0}" != "1" ]; then
+  set +e
+  /usr/bin/lockf -s -t 0 -k "$LOCK_FILE" /usr/bin/env FIGHT_AGENT_LOCKED=1 "$0" "$@"
+  lock_status=$?
+  set -e
+  if [ "$lock_status" -eq 75 ]; then
+    echo "INFO: another poll_mentions.py run is still active; skipping this cron tick"
+    exit 0
+  fi
+  exit "$lock_status"
+fi
 
 cd "$SCRIPT_DIR"
 mkdir -p logs responses
@@ -15,11 +27,5 @@ if [ ! -x "$PYTHON_BIN" ]; then
   echo "Run: cd $SCRIPT_DIR && python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt"
   exit 1
 fi
-
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  echo "INFO: another poll_mentions.py run is still active; skipping this cron tick"
-  exit 0
-fi
-trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
 
 exec "$PYTHON_BIN" -u poll_mentions.py "$@"

@@ -233,6 +233,7 @@ class PollMentionsTests(unittest.TestCase):
             ]
         )
         runtime = self.make_runtime(state, responder, x_client)
+        self.poll_mentions.save_poll_state(self.config.logs_dir / "poll_state.json", {"since_id": "199"})
 
         summary = self.poll_mentions.poll_once(self.config, runtime)
 
@@ -278,15 +279,62 @@ class PollMentionsTests(unittest.TestCase):
         self.assertEqual(runtime.processor.bot_user_id, "bot-123")
         self.assertEqual(summary["processed_mentions"], 0)
 
+    def test_first_run_bootstraps_since_id_without_processing_backlog(self):
+        state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})
+        responder = FakeResponder()
+        x_client = FakeXClient(
+            [
+                {
+                    "data": [
+                        {"id": "202", "text": "@TheFightAgent old second", "author_id": "author-2"},
+                        {"id": "201", "text": "@TheFightAgent old first", "author_id": "author-1"},
+                    ],
+                    "meta": {"newest_id": "202"},
+                }
+            ]
+        )
+        runtime = self.make_runtime(state, responder, x_client)
+
+        summary = self.poll_mentions.poll_once(self.config, runtime)
+
+        self.assertEqual(responder.calls, [])
+        self.assertEqual(summary["fetched_mentions"], 2)
+        self.assertEqual(summary["processed_mentions"], 0)
+        self.assertTrue(summary["bootstrapped"])
+        self.assertEqual(self.poll_mentions.load_poll_state(self.config.logs_dir / "poll_state.json")["since_id"], "202")
+
+    def test_mark_seen_advances_cursor_without_processing_existing_mentions(self):
+        state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})
+        responder = FakeResponder()
+        x_client = FakeXClient(
+            [
+                {
+                    "data": [{"id": "205", "text": "@TheFightAgent current newest", "author_id": "author-1"}],
+                    "meta": {"newest_id": "205"},
+                }
+            ]
+        )
+        runtime = self.make_runtime(state, responder, x_client)
+        self.poll_mentions.save_poll_state(self.config.logs_dir / "poll_state.json", {"since_id": "199"})
+
+        summary = self.poll_mentions.poll_once(self.config, runtime, mark_seen=True)
+
+        self.assertEqual(x_client.mention_calls[0]["since_id"], "199")
+        self.assertEqual(responder.calls, [])
+        self.assertEqual(summary["processed_mentions"], 0)
+        self.assertTrue(summary["mark_seen"])
+        self.assertEqual(self.poll_mentions.load_poll_state(self.config.logs_dir / "poll_state.json")["since_id"], "205")
+
 
 class CronWrapperTests(unittest.TestCase):
-    def test_cron_wrapper_uses_atomic_lock_directory_to_skip_overlaps(self):
+    def test_cron_wrapper_uses_lockf_to_skip_overlaps(self):
         script = (ROOT / "run_agent_m1_cron.sh").read_text(encoding="utf-8")
 
-        self.assertIn('LOCK_DIR="$SCRIPT_DIR/logs/poll_mentions.lock"', script)
-        self.assertIn('if ! mkdir "$LOCK_DIR" 2>/dev/null; then', script)
+        self.assertIn('LOCK_FILE="/tmp/fight_predictor_agent.lockfile"', script)
+        self.assertIn('/usr/bin/lockf -s -t 0 -k "$LOCK_FILE"', script)
+        self.assertIn('if [ "$lock_status" -eq 75 ]; then', script)
         self.assertIn("another poll_mentions.py run is still active", script)
-        self.assertIn('trap \'rm -rf "$LOCK_DIR"\' EXIT INT TERM', script)
+        self.assertNotIn("poll_mentions.lock", script)
         self.assertIn('exec "$PYTHON_BIN" -u poll_mentions.py "$@"', script)
 
 

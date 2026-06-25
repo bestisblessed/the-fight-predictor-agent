@@ -84,6 +84,8 @@ def poll_once(
     max_results: int = 100,
     limit: int | None = None,
     dry_run: bool = False,
+    mark_seen: bool = False,
+    process_existing: bool = False,
 ) -> dict[str, Any]:
     runtime_bundle = _runtime_bundle(config, runtime)
     state = runtime_bundle.state
@@ -93,6 +95,7 @@ def poll_once(
     state_path = config.logs_dir / POLL_STATE_FILENAME
     poll_state = load_poll_state(state_path)
     since_id = str(poll_state.get("since_id") or "").strip() or None
+    first_run = since_id is None
 
     mentions, newest_id = _fetch_mentions(
         x_client=x_client,
@@ -104,20 +107,40 @@ def poll_once(
     mentions = _oldest_first(mentions)
     if limit is not None:
         mentions = mentions[: max(0, int(limit))]
+    cursor_id = _max_tweet_id([newest_id] + [str(mention.get("id") or "") for mention, _includes in mentions])
+
+    bootstrapped = False
+    if not dry_run and cursor_id and (mark_seen or (first_run and not process_existing)):
+        save_poll_state(state_path, {"since_id": cursor_id})
+        bootstrapped = first_run and not mark_seen
 
     processed_count = 0
-    processed_ids = []
+    handled_ids = []
+    if bootstrapped or mark_seen:
+        return {
+            "bot_user_id": bot_user_id,
+            "since_id": since_id,
+            "newest_id": newest_id,
+            "fetched_mentions": len(mentions),
+            "processed_mentions": processed_count,
+            "dry_run": dry_run,
+            "bootstrapped": bootstrapped,
+            "mark_seen": mark_seen,
+        }
+
     for mention, includes in mentions:
         tweet_id = str(mention.get("id") or "").strip()
         if not tweet_id:
             continue
         event_key = f"{bot_user_id}:{tweet_id}"
         if state.is_processed(event_key):
+            handled_ids.append(tweet_id)
             continue
         if str(mention.get("author_id") or "").strip() == bot_user_id:
             if not dry_run:
                 payload = mention_to_event_payload(mention, bot_user_id, includes)
                 runtime_bundle.processor.process_inbox_record({"payload": payload}, source="poll-mentions")
+            handled_ids.append(tweet_id)
             continue
 
         if not dry_run:
@@ -126,10 +149,10 @@ def poll_once(
             if not state.is_processed(event_key):
                 raise RuntimeError(f"Mention {tweet_id} was not fully processed; leaving since_id unchanged")
         processed_count += 1
-        processed_ids.append(tweet_id)
+        handled_ids.append(tweet_id)
 
     if not dry_run:
-        next_since_id = _max_tweet_id(processed_ids) or newest_id
+        next_since_id = _max_tweet_id(handled_ids) or cursor_id
         if next_since_id:
             save_poll_state(state_path, {"since_id": next_since_id})
 
@@ -140,6 +163,8 @@ def poll_once(
         "fetched_mentions": len(mentions),
         "processed_mentions": processed_count,
         "dry_run": dry_run,
+        "bootstrapped": bootstrapped,
+        "mark_seen": mark_seen,
     }
 
 
@@ -224,8 +249,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Poll X mentions and reply to new requests")
     parser.add_argument("--dry-run", action="store_true", help="Fetch mentions without replying or updating poll state")
     parser.add_argument("--limit", type=int, default=None, help="Maximum mentions to process this run")
+    parser.add_argument("--mark-seen", action="store_true", help="Advance the poll cursor without replying")
+    parser.add_argument(
+        "--process-existing",
+        action="store_true",
+        help="On first run, process existing mentions instead of bootstrapping the cursor",
+    )
     parser.add_argument("--max-results", type=int, default=100, help="X mentions page size, 5-100")
     args = parser.parse_args()
+    if args.mark_seen and args.process_existing:
+        parser.error("--mark-seen and --process-existing cannot be used together")
 
     config = Config.from_env()
     config.require_runtime()
@@ -234,6 +267,8 @@ def main() -> None:
         max_results=args.max_results,
         limit=args.limit,
         dry_run=args.dry_run,
+        mark_seen=args.mark_seen,
+        process_existing=args.process_existing,
     )
     print(json.dumps(summary, indent=2), flush=True)
 
