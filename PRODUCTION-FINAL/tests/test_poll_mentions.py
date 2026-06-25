@@ -56,6 +56,7 @@ class FakeContextBuilder:
 class FakeResponder:
     def __init__(self):
         self.calls = []
+        self.reply_text = "Official pick: Fighter One"
 
     def generate_reply(self, tweet_text, context_text, context_payload):
         self.calls.append(
@@ -66,7 +67,7 @@ class FakeResponder:
             }
         )
         return {
-            "text": "Official pick: Fighter One",
+            "text": self.reply_text,
             "response_id": "resp_1",
             "model": "fake-model",
             "matched_fighters": context_payload["matched_fighters"],
@@ -241,6 +242,35 @@ class PollMentionsTests(unittest.TestCase):
         self.assertEqual(summary["fetched_mentions"], 3)
         self.assertEqual(summary["processed_mentions"], 1)
         self.assertIn(("bot-123:202", "202", "self_authored"), state.processed_marks)
+
+    def test_posted_reply_text_removes_internal_notes_and_links(self):
+        state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})
+        responder = FakeResponder()
+        responder.reply_text = (
+            "I found this in local data after fuzzy lookup.\n\n"
+            "Official pick: Fighter One. ([ufc.com](https://www.ufc.com/event/example))\n"
+            "Sources: https://www.sherdog.com/fighter/example"
+        )
+        x_client = FakeXClient(
+            [
+                {
+                    "data": [{"id": "200", "text": "@TheFightAgent matchup?", "author_id": "author-1"}],
+                    "meta": {"newest_id": "200"},
+                }
+            ]
+        )
+        runtime = self.make_runtime(state, responder, x_client)
+        self.poll_mentions.save_poll_state(self.config.logs_dir / "poll_state.json", {"since_id": "199"})
+
+        self.poll_mentions.poll_once(self.config, runtime)
+
+        posted_text = x_client.replies[0][1]
+        self.assertEqual(posted_text, "Official pick: Fighter One.")
+        self.assertEqual(state.reply_records[0]["reply_text"], "Official pick: Fighter One.")
+        self.assertNotIn("fuzzy lookup", posted_text.lower())
+        self.assertNotIn("http", posted_text.lower())
+        self.assertNotIn("ufc.com", posted_text.lower())
+        self.assertNotIn("Sources:", posted_text)
 
     def test_poll_state_is_not_advanced_when_processing_raises(self):
         class FailingResponder(FakeResponder):

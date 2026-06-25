@@ -22,7 +22,7 @@ For detailed matchup requests, include:
 - Finish profile
 - Key uncertainty
 
-Do not say the dataset is missing if any local context is provided. If a source note is provided, include it exactly once near the top. For detailed requests, write a full natural analysis with enough specifics to justify the pick. Use plain text; do not use markdown bold, markdown tables, or code fences.
+Do not say the dataset is missing if any local context is provided. Do not mention fuzzy matching, fuzzy lookup, Code Interpreter, internal lookup methods, or internal data resolution. Never include URLs, domains, hyperlinks, markdown links, source lists, citations, or "Sources:" in the reply. For detailed requests, write a full natural analysis with enough specifics to justify the pick. Use plain text; do not use markdown bold, markdown tables, or code fences.
 """
 
 CODE_INTERPRETER_RESOLVER_PROMPT = """Use Python/pandas and the attached CSV files to resolve MMA fighter names from the request.
@@ -80,7 +80,6 @@ class OpenAIResponder:
             if code_result and code_result.get("complete") and len(code_result.get("matched_fighters", [])) >= 2:
                 effective_context = str(code_result.get("context_text") or context_text)
                 matched_fighters = code_result.get("matched_fighters", matched_fighters)
-                source_note = LOCAL_FUZZY_NOTE
                 model_used = self.escalation_model
                 resolution_source = "code_interpreter"
             else:
@@ -98,7 +97,7 @@ class OpenAIResponder:
         )
         response_id = getattr(response, "id", None)
         raw_text = extract_text(response)
-        final_text = ensure_source_note(raw_text, source_note)
+        final_text = sanitize_reply_for_x(ensure_source_note(raw_text, source_note))
         if not final_text:
             raise ValueError("OpenAI returned an empty reply")
         return {
@@ -171,7 +170,8 @@ class OpenAIResponder:
             f"Local MMA context attempt:\n{context_text}\n\n"
             f"Code Interpreter local resolver result:\n{json.dumps(code_result or {}, ensure_ascii=True)}\n\n"
             "Use web search to resolve current matchup details. "
-            "Pick a specific relevant MMA matchup from current web results, cite sources, and include winner, method/round, confidence, and reasoning."
+            "Pick a specific relevant MMA matchup from current web results and include winner, method/round, confidence, and reasoning. "
+            "Do not include URLs, domains, hyperlinks, markdown links, source lists, citations, or Sources text in the final reply."
         )
         try:
             response = self.client.responses.create(
@@ -300,11 +300,29 @@ def ensure_source_note(text: str, source_note: str) -> str:
 
 
 def format_web_fallback_reply(text: str, citations: list[str]) -> str:
-    with_note = normalize_reply_text(text)
-    unique_citations = unique_urls(citations)
-    if unique_citations:
-        with_note = f"{with_note} Sources: {' '.join(unique_citations[:3])}"
-    return normalize_reply_text(with_note)
+    return sanitize_reply_for_x(text)
+
+
+def sanitize_reply_for_x(text: str) -> str:
+    sanitized = normalize_reply_text(text)
+    for internal_note in (LOCAL_FUZZY_NOTE,):
+        sanitized = sanitized.replace(internal_note, "")
+
+    sanitized = re.sub(r"(?:\n\n?)?Sources:\s.*\Z", "", sanitized, flags=re.IGNORECASE | re.DOTALL)
+    sanitized = re.sub(r"\s*\(\s*\[[^\]]+\]\([^)]+\)\s*\)", "", sanitized)
+    sanitized = re.sub(r"\[[^\]]+\]\([^)]+\)", "", sanitized)
+    sanitized = re.sub(r"https?://[^\s)\]}]+", "", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"www\.[^\s)\]}]+", "", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(
+        r"\b[a-z0-9][a-z0-9.-]*\.(?:com|org|net|io|co|gov|edu|tv|me|app|ai)(?:/[^\s)\]}]*)?",
+        "",
+        sanitized,
+        flags=re.IGNORECASE,
+    )
+    sanitized = re.sub(r"\(\s*\)", "", sanitized)
+    sanitized = re.sub(r"\[\s*\]", "", sanitized)
+    sanitized = re.sub(r"[ \t]+([.,;:!?])", r"\1", sanitized)
+    return normalize_reply_text(sanitized)
 
 
 def parse_json_object(text: str) -> dict[str, Any] | None:

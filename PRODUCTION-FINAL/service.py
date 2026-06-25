@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from context_builder import MmaContextBuilder, normalize_text
-from openai_service import OpenAIResponder
+from openai_service import OpenAIResponder, sanitize_reply_for_x
 from settings import Config
 from storage import StateStore, utc_now_iso
 from x_api import XApiClient
@@ -117,8 +117,22 @@ class EventProcessor:
             )
             return
 
+        reply_text = sanitize_reply_for_x(openai_result.get("text", ""))
+        if not reply_text:
+            self._record_failure(
+                event_key=event_key,
+                tweet_id=tweet_id,
+                payload=payload,
+                phase="reply_sanitize",
+                error="Reply text was empty after sanitizing URLs and internal notes",
+                retryable=False,
+                source=source,
+            )
+            self.state.mark_processed(event_key, tweet_id, "empty_sanitized_reply")
+            return
+
         try:
-            reply_response = self.x_client.create_reply(tweet_id=tweet_id, text=openai_result["text"])
+            reply_response = self.x_client.create_reply(tweet_id=tweet_id, text=reply_text)
         except Exception as exc:
             self._record_failure(
                 event_key=event_key,
@@ -151,7 +165,7 @@ class EventProcessor:
                 "event_key": event_key,
                 "tweet_id": tweet_id,
                 "reply_id": str(reply_id) if reply_id else "",
-                "reply_text": openai_result["text"],
+                "reply_text": reply_text,
                 "matched_fighters": openai_result.get("matched_fighters")
                 or context_payload["matched_fighters"],
                 "resolution_source": openai_result.get("resolution_source")
