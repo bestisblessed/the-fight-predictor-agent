@@ -4,6 +4,9 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import call, patch
+
+from requests import exceptions as requests_exceptions
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +100,10 @@ class FakeXClient:
             }
         )
         index = len(self.mention_calls) - 1
-        return self.pages[index] if index < len(self.pages) else {"data": [], "meta": {"result_count": 0}}
+        result = self.pages[index] if index < len(self.pages) else {"data": [], "meta": {"result_count": 0}}
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     def create_reply(self, tweet_id, text):
         self.replies.append((tweet_id, text))
@@ -216,6 +222,68 @@ class PollMentionsTests(unittest.TestCase):
         self.assertEqual(summary["fetched_mentions"], 3)
         self.assertEqual(summary["processed_mentions"], 3)
         self.assertEqual(self.poll_mentions.load_poll_state(self.config.logs_dir / "poll_state.json")["since_id"], "300")
+
+    def test_poll_once_retries_transport_failures_then_succeeds(self):
+        state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})
+        responder = FakeResponder()
+        x_client = FakeXClient(
+            [
+                requests_exceptions.ReadTimeout("first timeout"),
+                requests_exceptions.ConnectionError("connection reset"),
+                {"data": [], "meta": {"result_count": 0}},
+            ]
+        )
+        runtime = self.make_runtime(state, responder, x_client)
+        self.poll_mentions.save_poll_state(self.config.logs_dir / "poll_state.json", {"since_id": "199"})
+
+        with patch.object(self.poll_mentions.time, "sleep") as sleep:
+            summary = self.poll_mentions.poll_once(self.config, runtime)
+
+        self.assertEqual(len(x_client.mention_calls), 3)
+        self.assertEqual(sleep.call_args_list, [call(5), call(15)])
+        self.assertEqual(summary["processed_mentions"], 0)
+        self.assertEqual(x_client.replies, [])
+
+    def test_poll_once_preserves_final_transport_error_after_retries(self):
+        final_error = requests_exceptions.ReadTimeout("final timeout")
+        state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})
+        responder = FakeResponder()
+        x_client = FakeXClient(
+            [
+                requests_exceptions.ReadTimeout("first timeout"),
+                requests_exceptions.ConnectionError("connection reset"),
+                final_error,
+            ]
+        )
+        runtime = self.make_runtime(state, responder, x_client)
+        state_path = self.config.logs_dir / "poll_state.json"
+        self.poll_mentions.save_poll_state(state_path, {"since_id": "199"})
+
+        with patch.object(self.poll_mentions.time, "sleep") as sleep:
+            with self.assertRaises(requests_exceptions.ReadTimeout) as raised:
+                self.poll_mentions.poll_once(self.config, runtime)
+
+        self.assertIs(raised.exception, final_error)
+        self.assertEqual(len(x_client.mention_calls), 3)
+        self.assertEqual(sleep.call_args_list, [call(5), call(15)])
+        self.assertEqual(self.poll_mentions.load_poll_state(state_path)["since_id"], "199")
+        self.assertEqual(x_client.replies, [])
+
+    def test_poll_once_does_not_retry_non_transport_errors(self):
+        api_error = RuntimeError("X API request failed (401)")
+        state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})
+        responder = FakeResponder()
+        x_client = FakeXClient([api_error])
+        runtime = self.make_runtime(state, responder, x_client)
+
+        with patch.object(self.poll_mentions.time, "sleep") as sleep:
+            with self.assertRaises(RuntimeError) as raised:
+                self.poll_mentions.poll_once(self.config, runtime)
+
+        self.assertIs(raised.exception, api_error)
+        self.assertEqual(len(x_client.mention_calls), 1)
+        sleep.assert_not_called()
+        self.assertEqual(x_client.replies, [])
 
     def test_poll_once_skips_self_authored_and_already_processed_mentions(self):
         state = FakeState({"bot_user_id": "bot-123", "bot_username": "TheFightAgent"})

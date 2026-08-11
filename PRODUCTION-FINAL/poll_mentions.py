@@ -1,13 +1,17 @@
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
+
+from requests import exceptions as requests_exceptions
 
 from service import FightAgentRuntime, RuntimeBundle, build_runtime_bundle
 from settings import Config
 
 
 POLL_STATE_FILENAME = "poll_state.json"
+MENTION_FETCH_RETRY_DELAYS_SECONDS = (5, 15)
 
 
 def load_poll_state(path: Path) -> dict[str, Any]:
@@ -97,7 +101,7 @@ def poll_once(
     since_id = str(poll_state.get("since_id") or "").strip() or None
     first_run = since_id is None
 
-    mentions, newest_id = _fetch_mentions(
+    mentions, newest_id = _fetch_mentions_with_retries(
         x_client=x_client,
         bot_user_id=bot_user_id,
         since_id=since_id,
@@ -196,6 +200,37 @@ def _resolve_bot_user_id(config: Config, runtime: RuntimeBundle) -> str:
         )
     runtime.processor.bot_user_id = bot_user_id
     return bot_user_id
+
+
+def _fetch_mentions_with_retries(
+    x_client: Any,
+    bot_user_id: str,
+    since_id: str | None,
+    max_results: int,
+    fetch_limit: int | None = None,
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], str | None]:
+    attempt = 1
+    while True:
+        try:
+            return _fetch_mentions(
+                x_client=x_client,
+                bot_user_id=bot_user_id,
+                since_id=since_id,
+                max_results=max_results,
+                fetch_limit=fetch_limit,
+            )
+        except (requests_exceptions.Timeout, requests_exceptions.ConnectionError) as exc:
+            if attempt > len(MENTION_FETCH_RETRY_DELAYS_SECONDS):
+                raise
+            delay_seconds = MENTION_FETCH_RETRY_DELAYS_SECONDS[attempt - 1]
+            print(
+                f"WARNING: X mention fetch failed with {type(exc).__name__}; "
+                f"retrying in {delay_seconds} seconds "
+                f"(attempt {attempt + 1}/{len(MENTION_FETCH_RETRY_DELAYS_SECONDS) + 1})",
+                flush=True,
+            )
+            time.sleep(delay_seconds)
+            attempt += 1
 
 
 def _fetch_mentions(
